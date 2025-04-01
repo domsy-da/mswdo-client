@@ -523,6 +523,7 @@ try {
         <li class="active"><a href="user_page.php"><i class="fas fa-home"></i> Dashboard</a></li>
         <li><a href="programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
         <li><a href="file_application.php"><i class="fas fa-file-alt"></i> File Application</a></li>
+        <li><a href="application_history.php"><i class="fas fa-history"></i> Application History</a></li>
     </ul>
 </div>
 
@@ -587,6 +588,33 @@ try {
                 </div>
             </div>
             
+            <!-- Add this inside the stats-container div, after the Upcoming Programs card -->
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-history"></i>
+                </div>
+                <div class="stat-info">
+                    <?php
+                    // Get count of all applications for this user
+                    $all_applications = 0;
+                    try {
+                        $sql = "SELECT COUNT(*) as count FROM application_requests WHERE user_id = ?";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("i", $user_id);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        if ($row = $result->fetch_assoc()) {
+                            $all_applications = $row['count'];
+                        }
+                        $stmt->close();
+                    } catch (Exception $e) {
+                        // Handle error silently
+                    }
+                    ?>
+                    <h3><?php echo $all_applications; ?></h3>
+                    <p>Application History</p>
+                </div>
+            </div>
             
             </div>
         </div>
@@ -601,6 +629,10 @@ try {
                 <a href="programs.php" class="action-btn">
                     <i class="fas fa-calendar-alt"></i>
                     <span>View Programs</span>
+                </a>
+                <a href="application_history.php" class="action-btn">
+                    <i class="fas fa-history"></i>
+                    <span>Application History</span>
                 </a>
 
             </div>
@@ -992,4 +1024,3 @@ Array.from(forms).forEach(form => {
 </script>
 </body>
 </html>
-
