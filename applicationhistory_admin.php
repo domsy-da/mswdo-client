@@ -1,6 +1,5 @@
 <?php
 @include 'config.php';
-@include 'mailer.php'; // Include the mailer file
 session_start();
 
 // Check if user is logged in and is admin
@@ -29,158 +28,80 @@ try {
   // If there's an error with the database query, we'll use the session name
 }
 
+// Count total applications for the badge
+$total_applications = 0;
+try {
+  $count_sql = "SELECT COUNT(*) as count FROM application_requests WHERE status != 'Success'";
+  $count_result = $conn->query($count_sql);
+  if ($count_row = $count_result->fetch_assoc()) {
+      $total_applications = $count_row['count'];
+  }
+} catch (Exception $e) {
+  // Handle error silently
+}
+
 // Initialize messages
 $success_msg = "";
 $error_msg = "";
 
-// Handle status updates
-if (isset($_POST['update_status'])) {
-  $application_id = $_POST['application_id'];
-  $new_status = $_POST['new_status'];
-  
-  try {
-      $sql = "UPDATE application_requests SET status = ? WHERE id = ?";
-      $stmt = $conn->prepare($sql);
-      $stmt->bind_param("si", $new_status, $application_id);
-      $stmt->execute();
-      $stmt->close();
-      
-      // Set success message
-      $success_msg = "Application status updated successfully!";
-  } catch (Exception $e) {
-      // Set error message
-      $error_msg = "Error updating status: " . $e->getMessage();
-  }
-}
-
-// Add a new handler for marking applications as "Success"
-if (isset($_POST['mark_success'])) {
-  $application_id = $_POST['application_id'];
-  
-  try {
-      // First, get the user_id from the application and join with user_form to get the email
-      $sql = "SELECT ar.user_id, ar.request_purpose, ar.client_name, uf.name, uf.email 
-              FROM application_requests ar 
-              JOIN user_form uf ON ar.user_id = uf.id 
-              WHERE ar.id = ?";
-      $stmt = $conn->prepare($sql);
-      $stmt->bind_param("i", $application_id);
-      $stmt->execute();
-      $result = $stmt->get_result();
-      
-      if ($row = $result->fetch_assoc()) {
-          $user_id = $row['user_id'];
-          $user_name = $row['name'];
-          $user_email = $row['email']; // This gets the user's email from user_form table
-          $request_purpose = $row['request_purpose'];
-          $client_name = $row['client_name'];
-          
-          // Update the status to Success
-          $sql = "UPDATE application_requests SET status = 'Success' WHERE id = ?";
-          $stmt = $conn->prepare($sql);
-          $stmt->bind_param("i", $application_id);
-          $stmt->execute();
-          $stmt->close();
-          
-          // Prepare email content
-          $subject = "Your Application Has Been Approved - MSWDO Gloria";
-          
-          $html_message = "
-          <html>
-          <head>
-              <style>
-                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                  .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-                  .header { background-color: #0c5c2f; color: white; padding: 10px; text-align: center; border-radius: 5px 5px 0 0; }
-                  .content { padding: 20px; }
-                  .footer { background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 12px; border-radius: 0 0 5px 5px; }
-              </style>
-          </head>
-          <body>
-              <div class='container'>
-                  <div class='header'>
-                      <h2>Application Status Update</h2>
-                  </div>
-                  <div class='content'>
-                      <p>Dear $user_name,</p>
-                      <p>We are pleased to inform you that your application (ID: #$application_id) for <strong>$request_purpose</strong> has been successfully processed and approved.</p>
-                      <p>You may now visit the MSWDO office to claim your assistance. Please bring a valid ID for verification purposes.</p>
-                      <p>If you have any questions, please don't hesitate to contact us.</p>
-                      <p>Thank you for your patience.</p>
-                      <p>Best regards,<br>MSWDO Gloria Team</p>
-                  </div>
-                  <div class='footer'>
-                      <p>This is an automated message. Please do not reply to this email.</p>
-                      <p>© 2024 MSWDO Gloria. All rights reserved.</p>
-                  </div>
-              </div>
-          </body>
-          </html>
-          ";
-          
-          // Send email notification to the user using their email from user_form table
-          $email_result = sendEmail($user_email, $user_name, $subject, $html_message);
-          
-          if ($email_result['success']) {
-              $success_msg = "Application marked as successful and notification email sent!";
-          } else {
-              $success_msg = "Application marked as successful but failed to send email notification. Error: " . $email_result['message'];
-          }
-      } else {
-          $error_msg = "Application not found or user information is missing.";
-      }
-  } catch (Exception $e) {
-      // Set error message
-      $error_msg = "Error updating status: " . $e->getMessage();
-  }
-}
-
-// Initialize search query and status filter variables
-$search_query = isset($_GET['search']) ? $_GET['search'] : '';
+// Set default filter values
 $status_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
+$search_query = isset($_GET['search']) ? $_GET['search'] : '';
 
-// Initialize applications array (this should be populated from your database query)
-$applications = [];
+// Build the SQL query based on filters
+$sql_conditions = ["status != 'Success'"]; // Exclude successful applications
+$sql_params = [];
+$param_types = "";
+
+if ($status_filter != 'all') {
+  $sql_conditions[] = "status = ?";
+  $sql_params[] = $status_filter;
+  $param_types .= "s";
+}
+
+if (!empty($search_query)) {
+  $sql_conditions[] = "(client_name LIKE ? OR request_purpose LIKE ? OR id LIKE ?)";
+  $search_term = "%$search_query%";
+  $sql_params[] = $search_term;
+  $sql_params[] = $search_term;
+  $sql_params[] = $search_term;
+  $param_types .= "sss";
+}
+
+$sql = "SELECT id, client_name, request_purpose, application_date, status, amount 
+      FROM application_requests";
+
+if (!empty($sql_conditions)) {
+  $sql .= " WHERE " . implode(" AND ", $sql_conditions);
+}
+
+$sql .= " ORDER BY application_date DESC";
 
 // Fetch applications based on filters
+$applications = [];
 try {
-    $query = "SELECT * FROM application_requests WHERE 1=1";
-    
-    // Add search filter if provided
-    if (!empty($search_query)) {
-        $query .= " AND (client_name LIKE ? OR request_purpose LIKE ?)";
-    }
-    
-    // Add status filter if not 'all'
-    if ($status_filter != 'all') {
-        $query .= " AND status = ?";
-    }
-    
-    $query .= " ORDER BY application_date DESC";
-    
-    $stmt = $conn->prepare($query);
-    
-    // Bind parameters based on filters
-    if (!empty($search_query) && $status_filter != 'all') {
-        $search_param = "%$search_query%";
-        $stmt->bind_param("sss", $search_param, $search_param, $status_filter);
-    } elseif (!empty($search_query)) {
-        $search_param = "%$search_query%";
-        $stmt->bind_param("ss", $search_param, $search_param);
-    } elseif ($status_filter != 'all') {
-        $stmt->bind_param("s", $status_filter);
-    }
-    
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    while ($row = $result->fetch_assoc()) {
-        $applications[] = $row;
-    }
-    
-    $stmt->close();
+  $stmt = null;
+  if (!empty($sql_params)) {
+      $stmt = $conn->prepare($sql);
+      $stmt->bind_param($param_types, ...$sql_params);
+      $stmt->execute();
+      $result = $stmt->get_result();
+  } else {
+      $result = $conn->query($sql);
+  }
+  
+  if ($result) {
+      while ($row = $result->fetch_assoc()) {
+          $applications[] = $row;
+      }
+  }
+  
+  // Close the statement if it exists
+  if ($stmt !== null) {
+      $stmt->close();
+  }
 } catch (Exception $e) {
-    $error_msg = "Error fetching applications: " . $e->getMessage();
+  $error_msg = "Error fetching applications: " . $e->getMessage();
 }
 ?>
 <!DOCTYPE html>
@@ -188,7 +109,7 @@ try {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manage Services - MSWDO BMS</title>
+  <title>Application History - MSWDO BMS</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Font Awesome -->
@@ -283,6 +204,16 @@ try {
           width: 20px;
           text-align: center;
           font-size: 1.1rem;
+      }
+      
+      .badge-count {
+          background-color: var(--accent-color);
+          color: white;
+          font-size: 0.7rem;
+          font-weight: 600;
+          padding: 2px 6px;
+          border-radius: 10px;
+          margin-left: 8px;
       }
       
       /* Navbar Styles */
@@ -515,11 +446,6 @@ try {
           color: #7367f0;
       }
       
-      .status-success {
-          background-color: rgba(25, 135, 84, 0.1);
-          color: #198754;
-      }
-      
       .action-btn {
           padding: 6px 12px;
           border-radius: 5px;
@@ -543,50 +469,6 @@ try {
       
       .btn-view:hover {
           background-color: #7367f0;
-          color: white;
-      }
-      
-      .btn-approve {
-          background-color: rgba(40, 199, 111, 0.1);
-          color: #28c76f;
-          border: 1px solid rgba(40, 199, 111, 0.2);
-      }
-      
-      .btn-approve:hover {
-          background-color: #28c76f;
-          color: white;
-      }
-      
-      .btn-reject {
-          background-color: rgba(234, 84, 85, 0.1);
-          color: #ea5455;
-          border: 1px solid rgba(234, 84, 85, 0.2);
-      }
-      
-      .btn-reject:hover {
-          background-color: #ea5455;
-          color: white;
-      }
-      
-      .btn-delete {
-          background-color: rgba(234, 84, 85, 0.1);
-          color: #ea5455;
-          border: 1px solid rgba(234, 84, 85, 0.2);
-      }
-      
-      .btn-delete:hover {
-          background-color: #ea5455;
-          color: white;
-      }
-
-      .btn-done {
-          background-color: rgba(0, 123, 255, 0.1);
-          color: #007bff;
-          border: 1px solid rgba(0, 123, 255, 0.2);
-      }
-
-      .btn-done:hover {
-          background-color: #007bff;
           color: white;
       }
       
@@ -653,17 +535,6 @@ try {
           color: #6c757d;
           max-width: 500px;
           margin: 0 auto 20px;
-      }
-      
-      /* Modal Styles */
-      .modal-header {
-          background-color: var(--secondary-color);
-          color: white;
-      }
-      
-      .modal-footer {
-          border-top: 1px solid var(--border-color);
-          padding: 15px;
       }
       
       /* Responsive Adjustments */
@@ -780,10 +651,10 @@ try {
       </div>
       <ul class="sidebar-menu">
           <li><a href="admin_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-          <li class="active"><a href="admin_services.php"><i class="fas fa-hands-helping"></i> Services</a></li>
+          <li><a href="admin_services.php"><i class="fas fa-hands-helping"></i> Services</a></li>
           <li><a href="manage_users.php"><i class="fas fa-users"></i> Users</a></li>
           <li><a href="manage_programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
-          <li><a href="applicationhistory_admin.php"><i class="fas fa-history"></i> Application History</a></li>
+          <li class="active"><a href="applicationhistory_admin.php"><i class="fas fa-history"></i> Application History <span class="badge-count"><?php echo $total_applications; ?></span></a></li>
       </ul>
   </div>
 
@@ -817,7 +688,7 @@ try {
       <nav aria-label="breadcrumb">
           <ol class="breadcrumb">
               <li class="breadcrumb-item"><a href="admin_dashboard.php">Home</a></li>
-              <li class="breadcrumb-item active">Services</li>
+              <li class="breadcrumb-item active">Application History</li>
           </ol>
       </nav>
       
@@ -837,7 +708,7 @@ try {
       
       <div class="content">
           <div class="page-header">
-              <h2 class="page-title">Service Applications</h2>
+              <h2 class="page-title">Application History</h2>
               <div class="filter-container">
                   <div class="search-box">
                       <i class="fas fa-search search-icon"></i>
@@ -851,7 +722,6 @@ try {
                           <option value="Pending" <?php echo $status_filter == 'Pending' ? 'selected' : ''; ?>>Pending</option>
                           <option value="Processing" <?php echo $status_filter == 'Processing' ? 'selected' : ''; ?>>Processing</option>
                           <option value="Approved" <?php echo $status_filter == 'Approved' ? 'selected' : ''; ?>>Approved</option>
-                          <option value="Success" <?php echo $status_filter == 'Success' ? 'selected' : ''; ?>>Success</option>
                           <option value="Rejected" <?php echo $status_filter == 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
                       </select>
                       <?php if (!empty($search_query)): ?>
@@ -900,124 +770,6 @@ try {
                               <a href="admin_view_application.php?id=<?php echo $application['id']; ?>" class="action-btn btn-view">
                                   <i class="fas fa-eye"></i> View
                               </a>
-                              
-                              <?php if ($application['status'] == 'Pending'): ?>
-                              <button type="button" class="action-btn btn-approve" data-bs-toggle="modal" data-bs-target="#approveModal<?php echo $application['id']; ?>">
-                                  <i class="fas fa-check"></i> Approve
-                              </button>
-                              
-                              <button type="button" class="action-btn btn-reject" data-bs-toggle="modal" data-bs-target="#rejectModal<?php echo $application['id']; ?>">
-                                  <i class="fas fa-times"></i> Reject
-                              </button>
-                              <?php endif; ?>
-
-                              <?php if ($application['status'] == 'Approved'): ?>
-                              <button type="button" class="action-btn btn-done" data-bs-toggle="modal" data-bs-target="#doneModal<?php echo $application['id']; ?>">
-                                  <i class="fas fa-check-circle"></i> Done
-                              </button>
-                              <?php endif; ?>
-                              
-                              <button type="button" class="action-btn btn-delete" data-bs-toggle="modal" data-bs-target="#deleteModal<?php echo $application['id']; ?>">
-                                  <i class="fas fa-trash"></i> Delete
-                              </button>
-                              
-                              <!-- Approve Modal -->
-                              <div class="modal fade" id="approveModal<?php echo $application['id']; ?>" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
-                                  <div class="modal-dialog">
-                                      <div class="modal-content">
-                                          <div class="modal-header">
-                                              <h5 class="modal-title" id="approveModalLabel">Approve Application</h5>
-                                              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                          </div>
-                                          <div class="modal-body">
-                                              <p>Are you sure you want to approve this application?</p>
-                                              <p><strong>Client:</strong> <?php echo htmlspecialchars($application['client_name']); ?></p>
-                                              <p><strong>Service:</strong> <?php echo htmlspecialchars($application['request_purpose']); ?></p>
-                                          </div>
-                                          <div class="modal-footer">
-                                              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                              <form action="" method="post">
-                                                  <input type="hidden" name="application_id" value="<?php echo $application['id']; ?>">
-                                                  <input type="hidden" name="new_status" value="Approved">
-                                                  <button type="submit" name="update_status" class="btn btn-success">Approve</button>
-                                              </form>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                              
-                              <!-- Reject Modal -->
-                              <div class="modal fade" id="rejectModal<?php echo $application['id']; ?>" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
-                                  <div class="modal-dialog">
-                                      <div class="modal-content">
-                                          <div class="modal-header">
-                                              <h5 class="modal-title" id="rejectModalLabel">Reject Application</h5>
-                                              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                          </div>
-                                          <div class="modal-body">
-                                              <p>Are you sure you want to reject this application?</p>
-                                              <p><strong>Client:</strong> <?php echo htmlspecialchars($application['client_name']); ?></p>
-                                              <p><strong>Service:</strong> <?php echo htmlspecialchars($application['request_purpose']); ?></p>
-                                          </div>
-                                          <div class="modal-footer">
-                                              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                              <form action="" method="post">
-                                                  <input type="hidden" name="application_id" value="<?php echo $application['id']; ?>">
-                                                  <input type="hidden" name="new_status" value="Rejected">
-                                                  <button type="submit" name="update_status" class="btn btn-danger">Reject</button>
-                                              </form>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                              
-                              <!-- Delete Modal -->
-                              <div class="modal fade" id="deleteModal<?php echo $application['id']; ?>" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-                                  <div class="modal-dialog">
-                                      <div class="modal-content">
-                                          <div class="modal-header">
-                                              <h5 class="modal-title" id="deleteModalLabel">Delete Application</h5>
-                                              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                          </div>
-                                          <div class="modal-body">
-                                              <p>Are you sure you want to delete this application? This action cannot be undone.</p>
-                                              <p><strong>Client:</strong> <?php echo htmlspecialchars($application['client_name']); ?></p>
-                                              <p><strong>Service:</strong> <?php echo htmlspecialchars($application['request_purpose']); ?></p>
-                                          </div>
-                                          <div class="modal-footer">
-                                              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                              <form action="" method="post">
-                                                  <input type="hidden" name="application_id" value="<?php echo $application['id']; ?>">
-                                                  <button type="submit" name="delete_application" class="btn btn-danger">Delete</button>
-                                              </form>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-
-                              <!-- Done Modal -->
-                              <div class="modal fade" id="doneModal<?php echo $application['id']; ?>" tabindex="-1" aria-labelledby="doneModalLabel" aria-hidden="true">
-                                  <div class="modal-dialog">
-                                      <div class="modal-content">
-                                          <div class="modal-header">
-                                              <h5 class="modal-title" id="doneModalLabel">Mark Application as Success</h5>
-                                              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                          </div>
-                                          <div class="modal-body">
-                                              <p>Are you sure you want to mark this application as successful?</p>
-                                              <p><strong>Client:</strong> <?php echo htmlspecialchars($application['client_name']); ?></p>
-                                              <p><strong>Service:</strong> <?php echo htmlspecialchars($application['request_purpose']); ?></p>
-                                          </div>
-                                          <div class="modal-footer">
-                                              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                              <form action="" method="post">
-                                                  <input type="hidden" name="application_id" value="<?php echo $application['id']; ?>">
-                                                  <button type="submit" name="mark_success" class="btn btn-success">Done</button>
-                                              </form>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
                           </td>
                       </tr>
                       <?php endforeach; ?>
@@ -1054,7 +806,7 @@ try {
               contentWrapper.classList.toggle("full-width");
           });
           
-          
+          // Handle responsive behavior
           function checkWidth() {
               if (window.innerWidth < 992) {
                   sidebar.classList.add("collapsed");
@@ -1066,13 +818,12 @@ try {
               }
           }
           
-          
+          // Check width on page load
           checkWidth();
           
-     
+          // Check width on window resize
           window.addEventListener("resize", checkWidth);
       });
   </script>
 </body>
 </html>
-

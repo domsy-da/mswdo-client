@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Mar 29, 2025 at 08:57 AM
+-- Generation Time: Apr 05, 2025 at 02:45 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -60,16 +60,22 @@ CREATE TABLE `application_requests` (
   `id_file_path` varchar(255) DEFAULT NULL,
   `status` varchar(50) DEFAULT 'Pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `viewed` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `application_requests`
 --
 
-INSERT INTO `application_requests` (`id`, `user_id`, `request_purpose`, `client_name`, `client_age`, `client_gender`, `client_civil_status`, `client_birthday`, `client_birthplace`, `client_education`, `client_address`, `application_date`, `request_type`, `patient_name`, `relation_to_patient`, `relation_other`, `patient_birthday`, `patient_age`, `patient_gender`, `patient_civil_status`, `patient_birthplace`, `patient_education`, `patient_occupation`, `patient_religion`, `patient_address`, `same_as_client_address`, `amount`, `diagnosis`, `id_type`, `id_file_path`, `status`, `created_at`, `updated_at`) VALUES
-(3, 13, 'Medical Assistance', 'Juan Tamad', 21, 'Male', 'Widowed', '2025-03-03', 'Dine', 'Vocational', 'Bulaklakan Gloria Oriental Mindoro', '2025-03-29', 'Medical Assistance', 'Lebron', 'Parent', '', '2025-03-05', 35, 'Male', 'Married', 'Dine', 'College', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 30000.00, 'N/A', '', '', 'Approved', '2025-03-29 05:02:59', '2025-03-29 07:24:22'),
-(4, 10, 'Financial Assistance', 'Lebron James', 21, 'Male', 'Single', '2025-03-13', 'Purok tres', 'College', 'Bulaklakan Gloria Oriental Mindoro', '2025-03-29', 'Financial Assistance', 'Lebron', 'Parent', '', '2025-03-18', 35, 'Male', 'Married', 'Dine', 'Post Graduate', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 5000.00, 'N/A', '', '', 'Pending', '2025-03-29 07:46:05', '2025-03-29 07:46:05');
+INSERT INTO `application_requests` (`id`, `user_id`, `request_purpose`, `client_name`, `client_age`, `client_gender`, `client_civil_status`, `client_birthday`, `client_birthplace`, `client_education`, `client_address`, `application_date`, `request_type`, `patient_name`, `relation_to_patient`, `relation_other`, `patient_birthday`, `patient_age`, `patient_gender`, `patient_civil_status`, `patient_birthplace`, `patient_education`, `patient_occupation`, `patient_religion`, `patient_address`, `same_as_client_address`, `amount`, `diagnosis`, `id_type`, `id_file_path`, `status`, `created_at`, `updated_at`, `viewed`) VALUES
+(3, 13, 'Medical Assistance', 'Juan Tamad', 21, 'Male', 'Widowed', '2025-03-03', 'Dine', 'Vocational', 'Bulaklakan Gloria Oriental Mindoro', '2025-03-29', 'Medical Assistance', 'Lebron', 'Parent', '', '2025-03-05', 35, 'Male', 'Married', 'Dine', 'College', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 30000.00, 'N/A', '', '', 'Pending', '2025-03-29 05:02:59', '2025-04-04 08:26:26', 1),
+(4, 10, 'Financial Assistance', 'Lebron James', 21, 'Male', 'Single', '2025-03-13', 'Purok tres', 'College', 'Bulaklakan Gloria Oriental Mindoro', '2025-03-29', 'Financial Assistance', 'Lebron', 'Parent', '', '2025-03-18', 35, 'Male', 'Married', 'Dine', 'Post Graduate', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 5000.00, 'N/A', '', '', 'Approved', '2025-03-29 07:46:05', '2025-04-01 01:03:29', 0),
+(5, 10, 'Medical Assistance', 'Steph Curry', 37, 'Male', 'Married', '2025-03-11', 'Purok tres', 'College', 'Bulaklakan Gloria Oriental Mindoro', '2025-04-01', 'Medical Assistance', 'awdada', 'Child', '', '2025-03-26', 23, 'Male', 'Single', 'Dine', 'College', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 10000.00, 'N/A', '', '', 'Pending', '2025-04-01 01:14:34', '2025-04-04 07:17:59', 0),
+(6, 13, 'Financial Assistance', 'Alex', 21, 'Male', 'Single', '2025-04-04', 'Purok tres', 'College', 'Bulaklakan Gloria Oriental Mindoro', '2025-04-23', 'Financial Assistance', 'gegeg', 'Parent', '', '2025-04-08', 32, 'Male', 'Married', 'Dine', 'Post Graduate', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 75000.00, 'N/A', '', '', 'Pending', '2025-04-04 08:23:25', '2025-04-04 08:26:13', 0),
+(7, 14, 'Financial Assistance', 'Alex', 34, 'Male', 'Single', '2025-04-03', 'Purok tres', 'College', 'Bulaklakan Gloria Oriental Mindoro', '2025-04-04', 'Financial Assistance', 'Alex', 'Self', '', '2025-04-03', 32, 'Male', 'Single', 'Dine', 'College', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 0.00, '', '', '', 'Success', '2025-04-04 08:51:11', '2025-04-04 09:17:03', 0),
+(8, 15, 'Financial Assistance', 'Gerald Villaruel', 21, 'Male', 'Single', '2025-03-31', 'Purok tres', 'College', 'Malamig Gloria Oriental Mindoro', '2025-04-01', 'Financial Assistance', 'Gerald', 'Self', '', '2025-03-30', 21, 'Male', 'Single', 'purok tres', 'College', 'N/A', 'Catholic', '', 1, 10000.00, 'N/A', '', '', 'Pending', '2025-04-04 09:09:23', '2025-04-04 09:09:23', 0),
+(9, 16, 'Financial Assistance', 'Alex', 21, 'Male', 'Single', '2025-04-01', 'Purok tres', 'College', 'Bulaklakan Gloria Oriental Mindoro', '2025-04-05', 'Financial Assistance', 'Alex', 'Self', '', '2025-04-01', 21, 'Male', 'Single', 'purok tres', 'College', 'N/A', 'Catholic', 'Bulaklakan Gloria', 0, 7500.00, 'N/A', '', '', 'Success', '2025-04-05 00:37:34', '2025-04-05 00:44:02', 0);
 
 -- --------------------------------------------------------
 
@@ -173,7 +179,10 @@ CREATE TABLE `user_form` (
 
 INSERT INTO `user_form` (`id`, `name`, `email`, `password`, `user_type`) VALUES
 (10, 'doms', 'doms@gmail.com', '5f4dcc3b5aa765d61d8327deb882cf99', 'user'),
-(13, 'Alexander Lamboloto', 'alex@gmail.com', '5f4dcc3b5aa765d61d8327deb882cf99', 'user');
+(13, 'Alexander Lamboloto', 'alex@gmail.com', '5f4dcc3b5aa765d61d8327deb882cf99', 'user'),
+(14, 'Alexander Siasat', 'alexandersiasatmain@gmail.com', '5f4dcc3b5aa765d61d8327deb882cf99', 'user'),
+(15, 'Gerald Villaruel', 'geraldvillaruel12345@gmail.com', '5f4dcc3b5aa765d61d8327deb882cf99', 'user'),
+(16, 'Alex', 'lekzandergaming@gmail.com', '5f4dcc3b5aa765d61d8327deb882cf99', 'user');
 
 --
 -- Indexes for dumped tables
@@ -226,7 +235,7 @@ ALTER TABLE `user_form`
 -- AUTO_INCREMENT for table `application_requests`
 --
 ALTER TABLE `application_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `clients`
@@ -256,7 +265,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_form`
 --
 ALTER TABLE `user_form`
-  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- Constraints for dumped tables

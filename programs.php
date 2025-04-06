@@ -623,6 +623,7 @@ if ($category_result) {
             <li><a href="user_page.php"><i class="fas fa-home"></i> Dashboard</a></li>
             <li class="active"><a href="programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
             <li><a href="file_application.php"><i class="fas fa-file-alt"></i> File Application</a></li>
+            <li><a href="application_history.php"><i class="fas fa-history"></i> Application History</a></li>
         </ul>
     </div>
 

@@ -51,7 +51,7 @@ try {
   }
   
   // Count completed services
-  $sql = "SELECT COUNT(*) as count FROM application_requests WHERE status = 'Approved'";
+  $sql = "SELECT COUNT(*) as count FROM application_requests WHERE status = 'Success'";
   $result = $conn->query($sql);
   if ($row = $result->fetch_assoc()) {
       $completed_services = $row['count'];
@@ -736,6 +736,7 @@ try {
           <li><a href="admin_services.php"><i class="fas fa-hands-helping"></i> Services</a></li>
           <li><a href="manage_users.php"><i class="fas fa-users"></i> Users</a></li>
           <li><a href="manage_programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
+          <li><a href="applicationhistory_admin.php"><i class="fas fa-history"></i> Application History</a></li>
       </ul>
   </div>
 
@@ -1064,4 +1065,3 @@ try {
 </script>
 </body>
 </html>
-

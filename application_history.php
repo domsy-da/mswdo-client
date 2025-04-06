@@ -26,6 +26,35 @@ try {
     // Handle error silently
 }
 
+// Check for new successful applications
+$new_success_applications = [];
+try {
+    $sql = "SELECT id, request_purpose, client_name, application_date 
+            FROM application_requests 
+            WHERE user_id = ? AND status = 'Success' AND viewed = 0";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    while ($row = $result->fetch_assoc()) {
+        $new_success_applications[] = $row;
+    }
+    
+    // Mark notifications as viewed
+    if (!empty($new_success_applications)) {
+        $sql = "UPDATE application_requests SET viewed = 1 
+                WHERE user_id = ? AND status = 'Success' AND viewed = 0";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+    }
+    
+    $stmt->close();
+} catch (Exception $e) {
+    // Handle error silently
+}
+
 // Fetch user's applications
 $applications = [];
 try {
@@ -344,6 +373,34 @@ try {
             font-size: 0.9rem;
         }
         
+        /* Success Notification */
+        .success-notification {
+            background-color: rgba(25, 135, 84, 0.1);
+            border-left: 4px solid #198754;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .success-notification-title {
+            color: #198754;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .success-notification-content {
+            margin-left: 30px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
         /* Responsive Adjustments */
         @media (max-width: 992px) {
             .sidebar {
@@ -421,6 +478,25 @@ try {
     
     <div class="content">
         <h2 class="mb-4 text-center fw-bold text-primary">Your Application History</h2>
+        
+        <!-- Success Notifications -->
+        <?php if (!empty($new_success_applications)): ?>
+            <?php foreach ($new_success_applications as $success_app): ?>
+                <div class="success-notification">
+                    <div class="success-notification-title">
+                        <i class="fas fa-check-circle"></i> Application Successful!
+                    </div>
+                    <div class="success-notification-content">
+                        <p>Your application for <strong><?php echo htmlspecialchars($success_app['request_purpose']); ?></strong> 
+                        submitted on <?php echo date('M d, Y', strtotime($success_app['application_date'])); ?> 
+                        has been successfully processed.</p>
+                        <a href="view_user_application.php?id=<?php echo $success_app['id']; ?>" class="btn btn-sm btn-success">
+                            <i class="fas fa-eye"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
         
         <!-- Status Cards -->
         <div class="row mb-4">

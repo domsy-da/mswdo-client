@@ -936,6 +936,7 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
             <li><a href="admin_services.php"><i class="fas fa-hands-helping"></i> Services</a></li>
             <li><a href="manage_users.php"><i class="fas fa-users"></i> Users</a></li>
             <li class="active"><a href="manage_programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
+            <li><a href="applicationhistory_admin.php"><i class="fas fa-history"></i> Application History</a></li>
         </ul>
     </div>
 
