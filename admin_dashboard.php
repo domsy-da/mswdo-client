@@ -91,7 +91,7 @@ try {
 // Fetch upcoming programs
 $upcoming_program_list = [];
 try {
-  $sql = "SELECT id, title, date, location, status 
+  $sql = "SELECT id, title, date, location, status, description, category 
           FROM programs 
           WHERE status = 'upcoming' 
           ORDER BY date ASC LIMIT 5";
@@ -116,8 +116,8 @@ try {
   <!-- Custom CSS -->
   <style>
       :root {
-          --primary-color: #1a2e36;
-          --secondary-color: #0c5c2f;
+          --primary-color: rgb(7, 54, 27);
+          --secondary-color:rgb(7, 54, 27);
           --accent-color: #4cd964;
           --light-bg: #f8f9fa;
           --dark-text: #212529;
@@ -491,6 +491,11 @@ try {
           color: #00cfe8;
       }
       
+      .status-ongoing {
+          background-color: rgba(40, 167, 69, 0.1);
+          color: #28a745;
+      }
+      
       .action-btn {
           padding: 6px 12px;
           border-radius: 5px;
@@ -579,6 +584,21 @@ try {
       .action-btn-card span {
           font-weight: 500;
           text-align: center;
+      }
+      
+      /* Program Details */
+      .program-details-item {
+          margin-bottom: 15px;
+      }
+      
+      .program-details-label {
+          font-weight: 600;
+          color: var(--dark-text);
+          margin-bottom: 5px;
+      }
+      
+      .program-details-value {
+          color: #6c757d;
       }
       
       /* Responsive Adjustments */
@@ -920,9 +940,18 @@ try {
                                   </span>
                               </td>
                               <td>
-                                  <a href="view_program.php?id=<?php echo $program['id']; ?>" class="action-btn btn-view">
+                                  <button type="button" class="action-btn btn-view" 
+                                          data-bs-toggle="modal" 
+                                          data-bs-target="#viewProgramModal" 
+                                          data-id="<?php echo $program['id']; ?>"
+                                          data-title="<?php echo htmlspecialchars($program['title']); ?>"
+                                          data-date="<?php echo $program['date']; ?>"
+                                          data-location="<?php echo htmlspecialchars($program['location']); ?>"
+                                          data-description="<?php echo htmlspecialchars($program['description']); ?>"
+                                          data-status="<?php echo $program['status']; ?>"
+                                          data-category="<?php echo htmlspecialchars($program['category']); ?>">
                                       <i class="fas fa-eye"></i> View
-                                  </a>
+                                  </button>
                                   <a href="update_program.php?id=<?php echo $program['id']; ?>" class="action-btn btn-edit">
                                       <i class="fas fa-edit"></i> Edit
                                   </a>
@@ -955,79 +984,141 @@ try {
   </div>
 
   <!-- Add Program Modal -->
-    <div class="modal fade" id="addProgramModal" tabindex="-1" aria-labelledby="addProgramModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addProgramModalLabel">Add New Program</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form action="manage_programs.php" method="post">
-                    <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="title">Program Title</label>
-                                    <input type="text" class="form-control" id="title" name="title" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="date">Program Date</label>
-                                    <input type="date" class="form-control" id="date" name="date" required>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="location">Location</label>
-                                    <input type="text" class="form-control" id="location" name="location" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="category">Category</label>
-                                    <select class="form-select" id="category" name="category" required>
-                                        <option value="">Select Category</option>
-                                        <option value="Health">Health</option>
-                                        <option value="Education">Education</option>
-                                        <option value="Livelihood">Livelihood</option>
-                                        <option value="Social Protection">Social Protection</option>
-                                        <option value="Disaster Response">Disaster Response</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="status">Status</label>
-                                    <select class="form-select" id="status" name="status" required>
-                                        <option value="upcoming">Upcoming</option>
-                                        <option value="ongoing">Ongoing</option>
-                                        <option value="completed">Completed</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="description">Description</label>
-                            <textarea class="form-control" id="description" name="description" rows="4" required></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="add_program" class="btn btn-primary">Add Program</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+  <div class="modal fade" id="addProgramModal" tabindex="-1" aria-labelledby="addProgramModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+              <div class="modal-header">
+                  <h5 class="modal-title" id="addProgramModalLabel">Add New Program</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <form action="manage_programs.php" method="post">
+                  <div class="modal-body">
+                      <div class="row">
+                          <div class="col-md-6">
+                              <div class="form-group">
+                                  <label for="title">Program Title</label>
+                                  <input type="text" class="form-control" id="title" name="title" required>
+                              </div>
+                          </div>
+                          <div class="col-md-6">
+                              <div class="form-group">
+                                  <label for="date">Program Date</label>
+                                  <input type="date" class="form-control" id="date" name="date" required>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="row">
+                          <div class="col-md-6">
+                              <div class="form-group">
+                                  <label for="location">Location</label>
+                                  <input type="text" class="form-control" id="location" name="location" required>
+                              </div>
+                          </div>
+                          <div class="col-md-6">
+                              <div class="form-group">
+                                  <label for="category">Category</label>
+                                  <select class="form-select" id="category" name="category" required>
+                                      <option value="">Select Category</option>
+                                      <option value="Health">Health</option>
+                                      <option value="Education">Education</option>
+                                      <option value="Livelihood">Livelihood</option>
+                                      <option value="Social Protection">Social Protection</option>
+                                      <option value="Disaster Response">Disaster Response</option>
+                                      <option value="Other">Other</option>
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="row">
+                          <div class="col-md-6">
+                              <div class="form-group">
+                                  <label for="status">Status</label>
+                                  <select class="form-select" id="status" name="status" required>
+                                      <option value="upcoming">Upcoming</option>
+                                      <option value="ongoing">Ongoing</option>
+                                      <option value="completed">Completed</option>
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="description">Description</label>
+                          <textarea class="form-control" id="description" name="description" rows="4" required></textarea>
+                      </div>
+                  </div>
+                  <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                      <button type="submit" name="add_program" class="btn btn-primary">Add Program</button>
+                  </div>
+              </form>
+          </div>
+      </div>
+  </div>
+
+  <!-- View Program Modal -->
+  <div class="modal fade" id="viewProgramModal" tabindex="-1" aria-labelledby="viewProgramModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+              <div class="modal-header">
+                  <h5 class="modal-title" id="viewProgramModalLabel">Program Details</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                  <div class="row">
+                      <div class="col-md-6">
+                          <div class="program-details-item">
+                              <div class="program-details-label">Program Title</div>
+                              <div class="program-details-value" id="view_title"></div>
+                          </div>
+                      </div>
+                      <div class="col-md-6">
+                          <div class="program-details-item">
+                              <div class="program-details-label">Date</div>
+                              <div class="program-details-value" id="view_date"></div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div class="row">
+                      <div class="col-md-6">
+                          <div class="program-details-item">
+                              <div class="program-details-label">Location</div>
+                              <div class="program-details-value" id="view_location"></div>
+                          </div>
+                      </div>
+                      <div class="col-md-6">
+                          <div class="program-details-item">
+                              <div class="program-details-label">Category</div>
+                              <div class="program-details-value" id="view_category"></div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div class="row">
+                      <div class="col-md-6">
+                          <div class="program-details-item">
+                              <div class="program-details-label">Status</div>
+                              <div class="program-details-value">
+                                  <span class="status-badge" id="view_status_badge"></span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div class="program-details-item mt-3">
+                      <div class="program-details-label">Description</div>
+                      <div class="program-details-value" id="view_description"></div>
+                  </div>
+              </div>
+              <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              </div>
+          </div>
+      </div>
+  </div>
 
   <!-- Bootstrap JS Bundle with Popper -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -1044,7 +1135,7 @@ try {
           contentWrapper.classList.toggle("full-width");
       });
       
-      
+      // Handle responsive behavior
       function checkWidth() {
           if (window.innerWidth < 992) {
               sidebar.classList.add("collapsed");
@@ -1056,12 +1147,43 @@ try {
           }
       }
       
-      
+      // Check width on page load
       checkWidth();
       
- 
+      // Check width on window resize
       window.addEventListener("resize", checkWidth);
+      
+      // View Program Modal
+      const viewProgramModal = document.getElementById('viewProgramModal');
+      if (viewProgramModal) {
+          viewProgramModal.addEventListener('show.bs.modal', function(event) {
+              const button = event.relatedTarget;
+              const programId = button.getAttribute('data-id');
+              const programTitle = button.getAttribute('data-title');
+              const programDate = button.getAttribute('data-date');
+              const programLocation = button.getAttribute('data-location');
+              const programDescription = button.getAttribute('data-description');
+              const programStatus = button.getAttribute('data-status');
+              const programCategory = button.getAttribute('data-category');
+              
+              const modal = this;
+              modal.querySelector('#view_title').textContent = programTitle;
+              modal.querySelector('#view_date').textContent = new Date(programDate).toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+              });
+              modal.querySelector('#view_location').textContent = programLocation;
+              modal.querySelector('#view_description').textContent = programDescription;
+              modal.querySelector('#view_category').textContent = programCategory;
+              
+              const statusBadge = modal.querySelector('#view_status_badge');
+              statusBadge.textContent = programStatus.charAt(0).toUpperCase() + programStatus.slice(1);
+              statusBadge.className = 'status-badge status-' + programStatus.toLowerCase();
+          });
+      }
   });
-</script>
+  </script>
 </body>
 </html>

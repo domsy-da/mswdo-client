@@ -117,8 +117,8 @@ try {
   <!-- Custom CSS -->
   <style>
       :root {
-          --primary-color: #1a2e36;
-          --secondary-color: #0c5c2f;
+          --primary-color: rgb(7, 54, 27);
+          --secondary-color:rgb(7, 54, 27);
           --accent-color: #4cd964;
           --light-bg: #f8f9fa;
           --dark-text: #212529;

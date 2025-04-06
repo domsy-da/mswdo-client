@@ -296,15 +296,15 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <!-- Custom CSS -->
     <style>
-        :root {
-            --primary-color: #1a2e36;
-            --secondary-color: #0c5c2f;
-            --accent-color: #4cd964;
-            --light-bg: #f8f9fa;
-            --dark-text: #212529;
-            --light-text: #f8f9fa;
-            --border-color: #dee2e6;
-        }
+     :root {
+          --primary-color: rgb(7, 54, 27);
+          --secondary-color:rgb(7, 54, 27);
+          --accent-color: #4cd964;
+          --light-bg: #f8f9fa;
+          --dark-text: #212529;
+          --light-text: #f8f9fa;
+          --border-color: #dee2e6;
+      }
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -820,6 +820,21 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
             margin: 0 auto 20px;
         }
         
+        /* Program Details */
+        .program-details-item {
+            margin-bottom: 15px;
+        }
+        
+        .program-details-label {
+            font-weight: 600;
+            color: var(--dark-text);
+            margin-bottom: 5px;
+        }
+        
+        .program-details-value {
+            color: #6c757d;
+        }
+        
         /* Responsive Adjustments */
         @media (max-width: 992px) {
             .sidebar {
@@ -1070,6 +1085,19 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
                                 </span>
                             </td>
                             <td>
+                                <button type="button" class="action-btn btn-view" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#viewProgramModal" 
+                                        data-id="<?php echo $program['id']; ?>"
+                                        data-title="<?php echo htmlspecialchars($program['title']); ?>"
+                                        data-date="<?php echo $program['date']; ?>"
+                                        data-location="<?php echo htmlspecialchars($program['location']); ?>"
+                                        data-description="<?php echo htmlspecialchars($program['description']); ?>"
+                                        data-status="<?php echo $program['status']; ?>"
+                                        data-category="<?php echo htmlspecialchars($program['category']); ?>">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                                
                                 <button type="button" class="action-btn btn-edit" 
                                         data-bs-toggle="modal" 
                                         data-bs-target="#editProgramModal" 
@@ -1107,6 +1135,68 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
                 </table>
             </div>
             <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- View Program Modal -->
+    <div class="modal fade" id="viewProgramModal" tabindex="-1" aria-labelledby="viewProgramModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewProgramModalLabel">Program Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="program-details-item">
+                                <div class="program-details-label">Program Title</div>
+                                <div class="program-details-value" id="view_title"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="program-details-item">
+                                <div class="program-details-label">Date</div>
+                                <div class="program-details-value" id="view_date"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="program-details-item">
+                                <div class="program-details-label">Location</div>
+                                <div class="program-details-value" id="view_location"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="program-details-item">
+                                <div class="program-details-label">Category</div>
+                                <div class="program-details-value" id="view_category"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="program-details-item">
+                                <div class="program-details-label">Status</div>
+                                <div class="program-details-value">
+                                    <span class="status-badge" id="view_status_badge"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="program-details-item mt-3">
+                        <div class="program-details-label">Description</div>
+                        <div class="program-details-value" id="view_description"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1347,6 +1437,37 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
             // Check on resize
             window.addEventListener("resize", checkWidth);
             
+            // View Program Modal
+            const viewProgramModal = document.getElementById('viewProgramModal');
+            if (viewProgramModal) {
+                viewProgramModal.addEventListener('show.bs.modal', function(event) {
+                    const button = event.relatedTarget;
+                    const programId = button.getAttribute('data-id');
+                    const programTitle = button.getAttribute('data-title');
+                    const programDate = button.getAttribute('data-date');
+                    const programLocation = button.getAttribute('data-location');
+                    const programDescription = button.getAttribute('data-description');
+                    const programStatus = button.getAttribute('data-status');
+                    const programCategory = button.getAttribute('data-category');
+                    
+                    const modal = this;
+                    modal.querySelector('#view_title').textContent = programTitle;
+                    modal.querySelector('#view_date').textContent = new Date(programDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                    modal.querySelector('#view_location').textContent = programLocation;
+                    modal.querySelector('#view_description').textContent = programDescription;
+                    modal.querySelector('#view_category').textContent = programCategory;
+                    
+                    const statusBadge = modal.querySelector('#view_status_badge');
+                    statusBadge.textContent = programStatus.charAt(0).toUpperCase() + programStatus.slice(1);
+                    statusBadge.className = 'status-badge status-' + programStatus.toLowerCase();
+                });
+            }
+            
             // Edit Program Modal
             const editProgramModal = document.getElementById('editProgramModal');
             if (editProgramModal) {
@@ -1402,4 +1523,3 @@ $total_programs = $upcoming_count + $ongoing_count + $completed_count;
     </script>
 </body>
 </html>
-

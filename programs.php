@@ -109,16 +109,16 @@ if ($category_result) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <!-- Custom CSS -->
     <style>
-        :root {
-            --primary-color: #1a2e36;
-            --secondary-color: #0c5c2f;
+            :root {
+            --primary-color: rgb(7, 54, 27);
+            --secondary-color:rgb(7, 54, 27);
             --accent-color: #4cd964;
             --light-bg: #f8f9fa;
             --dark-text: #212529;
             --light-text: #f8f9fa;
             --border-color: #dee2e6;
         }
-        
+            
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;

@@ -407,6 +407,7 @@ if ($is_admin && $application && isset($application['user_id'])) {
             <li><a href="admin_services.php"><i class="fas fa-hands-helping"></i> Services</a></li>
             <li><a href="manage_users.php"><i class="fas fa-users"></i> Users</a></li>
             <li><a href="manage_programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
+            <li><a href="applicationhistory_admin.php"><i class="fas fa-history"></i> Application History</a></li>
             <?php else: ?>
             <li><a href="user_page.php"><i class="fas fa-home"></i> Dashboard</a></li>
             <li><a href="programs.php"><i class="fas fa-calendar-alt"></i> Programs</a></li>
