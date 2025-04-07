@@ -53,6 +53,27 @@ if (isset($_POST['update_status'])) {
   }
 }
 
+// Handle delete application
+if (isset($_POST['delete_application'])) {
+  $application_id = $_POST['application_id'];
+  
+  try {
+      $sql = "DELETE FROM application_requests WHERE id = ?";
+      $stmt = $conn->prepare($sql);
+      $stmt->bind_param("i", $application_id);
+      $stmt->execute();
+      
+      if ($stmt->affected_rows > 0) {
+          $success_msg = "Application deleted successfully!";
+      } else {
+          $error_msg = "Error: Application not found or already deleted.";
+      }
+      $stmt->close();
+  } catch (Exception $e) {
+      $error_msg = "Error deleting application: " . $e->getMessage();
+  }
+}
+
 // Add a new handler for marking applications as "Success"
 if (isset($_POST['mark_success'])) {
   $application_id = $_POST['application_id'];
