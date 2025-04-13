@@ -31,7 +31,7 @@ function sendEmail($to_email, $to_name, $subject, $html_message, $plain_message 
         
         // SMTP authentication credentials - this is for the SENDING account only
         $mail->Username   = 'alexandersiasatmain@gmail.com';          
-        $mail->Password   = 'hhrf dlef xpiq mwqo';            
+        $mail->Password   = 'etxj llae shxv aest';            
         
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;   
         $mail->Port       = 587;                              

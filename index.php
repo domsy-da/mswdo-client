@@ -1,33 +1,111 @@
 <?php
 session_start(); // Start the session
 @include 'config.php';
+@include 'mailer.php'; // Include your PHPMailer setup file
 
 // Initialize error array
 $error = array();
 
-// Process registration form
-if(isset($_POST['register_submit'])){
+// Function to generate OTP
+function generateOTP($length = 6) {
+    $characters = '0123456789';
+    $otp = '';
+    for ($i = 0; $i < $length; $i++) {
+        $otp .= $characters[rand(0, strlen($characters) - 1)];
+    }
+    return $otp;
+}
+
+// Function to send OTP via email using PHPMailer
+function sendOTP($email, $otp, $name) {
+    $subject = "Your OTP Verification Code - MSWDO Gloria";
+    
+    // Create HTML message with better formatting
+    $html_message = "
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;'>
+        <h2 style='color: #0c5c2f;'>MSWDO Gloria - Email Verification</h2>
+        <p>Hello $name,</p>
+        <p>Thank you for registering with MSWDO Gloria. Please use the following verification code to complete your registration:</p>
+        <div style='background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;'>
+            $otp
+        </div>
+        <p>This code will expire in 10 minutes.</p>
+        <p>If you did not request this verification, please ignore this email.</p>
+        <p>Best regards,<br>MSWDO Gloria Team</p>
+    </div>
+    ";
+    
+    // Plain text alternative
+    $plain_message = "Hello $name,\n\nYour OTP verification code is: $otp\n\nThis code will expire in 10 minutes.\n\nBest regards,\nMSWDO Gloria Team";
+    
+    // Use the sendEmail function from your mailer.php
+    $result = sendEmail($email, $name, $subject, $html_message, $plain_message);
+    
+    return $result['success'];
+}
+
+// Process registration form - Step 1: Submit email and details
+if(isset($_POST['register_step1'])){
    $name = mysqli_real_escape_string($conn, $_POST['name']);
    $email = mysqli_real_escape_string($conn, $_POST['email']);
-   $pass = md5($_POST['password']);
-   $cpass = md5($_POST['cpassword']);
-   $user_type = 'user'; // Set user type to 'user' only
-
-   $select = " SELECT * FROM user_form WHERE email = '$email' && password = '$pass' ";
-
+   $pass = $_POST['password'];
+   $cpass = $_POST['cpassword'];
+   
+   // Validate inputs
+   $select = " SELECT * FROM user_form WHERE email = '$email'";
    $result = mysqli_query($conn, $select);
 
    if(mysqli_num_rows($result) > 0){
       $error[] = 'user already exist!';
-   }else{
-      if($pass != $cpass){
-         $error[] = 'password not matched!';
-      }else{
-         $insert = "INSERT INTO user_form(name, email, password, user_type) VALUES('$name','$email','$pass','$user_type')";
-         mysqli_query($conn, $insert);
-         header('location:index.php');
-         exit(); // Added exit after redirect
+   } else if($pass != $cpass){
+      $error[] = 'password not matched!';
+   } else {
+      // Generate OTP and store in session
+      $otp = generateOTP();
+      $_SESSION['registration_otp'] = $otp;
+      $_SESSION['registration_name'] = $name;
+      $_SESSION['registration_email'] = $email;
+      $_SESSION['registration_password'] = $pass;
+      
+      // Send OTP to user's email using PHPMailer
+      if(sendOTP($email, $otp, $name)) {
+         // Show OTP input form
+         $_SESSION['show_otp_form'] = true;
+      } else {
+         $error[] = 'Failed to send OTP. Please check your email address and try again.';
       }
+   }
+}
+
+// Process registration form - Step 2: Verify OTP and complete registration
+if(isset($_POST['verify_otp'])){
+   $entered_otp = mysqli_real_escape_string($conn, $_POST['otp']);
+   
+   // Verify OTP
+   if(isset($_SESSION['registration_otp']) && $_SESSION['registration_otp'] == $entered_otp) {
+      // OTP is correct, proceed with registration
+      $name = $_SESSION['registration_name'];
+      $email = $_SESSION['registration_email'];
+      $pass = md5($_SESSION['registration_password']); // Hash password for storage
+      $user_type = 'user';
+      
+      $insert = "INSERT INTO user_form(name, email, password, user_type) VALUES('$name','$email','$pass','$user_type')";
+      if(mysqli_query($conn, $insert)) {
+         // Clear registration session data
+         unset($_SESSION['registration_otp']);
+         unset($_SESSION['registration_name']);
+         unset($_SESSION['registration_email']);
+         unset($_SESSION['registration_password']);
+         unset($_SESSION['show_otp_form']);
+         
+         // Redirect to login
+         header('location:index.php');
+         exit();
+      } else {
+         $error[] = 'Registration failed. Please try again.';
+      }
+   } else {
+      $error[] = 'Invalid OTP. Please try again.';
    }
 }
 
@@ -349,6 +427,18 @@ if(isset($_POST['login_submit'])){
             border-left: 4px solid #dc3545;
         }
 
+        .success-msg {
+            display: block;
+            background-color: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            border-left: 4px solid #28a745;
+        }
+
         .form-btn {
             width: 100%;
             padding: 12px;
@@ -390,6 +480,26 @@ if(isset($_POST['login_submit'])){
 
         .form-link a:hover {
             text-decoration: underline;
+        }
+
+        /* OTP Input Styles */
+        .otp-input {
+            text-align: center;
+            letter-spacing: 0.5em;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .otp-message {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .otp-email {
+            font-weight: 600;
+            color: var(--primary-color);
         }
 
         /* Admin Login Link */
@@ -983,7 +1093,7 @@ if(isset($_POST['login_submit'])){
                 </div>
 
                 <!-- Login Form -->
-                <div id="login-form" style="display: <?php echo (!isset($_GET['register'])) ? 'block' : 'none'; ?>">
+                <div id="login-form" style="display: <?php echo (!isset($_GET['register']) && !isset($_SESSION['show_otp_form'])) ? 'block' : 'none'; ?>">
                     <?php
                     if(isset($error) && isset($_POST['login_submit'])){
                         foreach($error as $err){
@@ -1010,59 +1120,79 @@ if(isset($_POST['login_submit'])){
                         <div class="form-link">
                             <p>Don't have an account? <a href="javascript:void(0)" onclick="showTab('register')">Register Now</a></p>
                         </div>
-             
-                     
                     </form>
                 </div>
 
                 <!-- Register Form -->
-                <div id="register-form" style="display: <?php echo (isset($_GET['register'])) ? 'block' : 'none'; ?>">
-                      
-                        <?php
-
-                                            
-                        if(isset($error) && isset($_POST['register_submit'])){
-                            foreach($error as $err){
-                                echo'<span class="error-msg">' .$err . '</span>';
-                                };
-                            };
-                            ?>
-                    <form action="" method="post">
-                        <div class="form-group">
-                            <i class="fas fa-user icon-left"></i>
-                            <input type="text" name="name" class="form-control" required placeholder="Full Name">
+                <div id="register-form" style="display: <?php echo (isset($_GET['register']) || isset($_SESSION['show_otp_form'])) ? 'block' : 'none'; ?>">
+                    <?php
+                    if(isset($error) && (isset($_POST['register_step1']) || isset($_POST['verify_otp']))){
+                        foreach($error as $err){
+                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>'.$err.'</span>';
+                        };
+                    };
+                    
+                    // Show OTP verification form if OTP has been sent
+                    if(isset($_SESSION['show_otp_form']) && $_SESSION['show_otp_form'] === true): 
+                    ?>
+                        <div class="success-msg">
+                            <i class="fas fa-check-circle me-2"></i> OTP has been sent to your email: <?php echo $_SESSION['registration_email']; ?>
                         </div>
-                        
-                        <div class="form-group">
-                            <i class="fas fa-envelope icon-left"></i>
-                            <input type="email" name="email" class="form-control" required placeholder="Email">
-                        </div>
-                        
-                        <div class="form-group">
-                            <i class="fas fa-lock icon-left"></i>
-                            <input type="password" name="password" id="reg-password" class="form-control password" required placeholder="Password">
-                            <i class="fas fa-eye toggle-password" id="toggleRegPassword"></i>
-                        </div>
-                        
-                        <div class="form-group">
-                            <i class="fas fa-check-circle icon-left"></i>
-                            <input type="password" name="cpassword" id="cpassword" class="form-control password" required placeholder="Confirm Password">
-                            <i class="fas fa-eye toggle-password" id="toggleCPassword"></i>
-                        </div>
-                        
-                        <!-- Hidden input for user type -->
-                        <input type="hidden" name="user_type" value="user">
-                        
-                        <button type="submit" name="register_submit" class="form-btn">
-                            <i class="fas fa-user-plus me-2"></i> Register
-                        </button>
-                        
-                        <div class="form-link">
-                            <p>Already have an account? <a href="javascript:void(0)" onclick="showTab('login')">Login Now</a></p>
-                        </div>
-                        
-                       
-                    </form>
+                        <form action="" method="post">
+                            <div class="form-group">
+                                <i class="fas fa-key icon-left"></i>
+                                <input type="text" name="otp" class="form-control otp-input" required placeholder="Enter OTP" maxlength="6">
+                            </div>
+                            
+                            <p class="otp-message">
+                                Please enter the 6-digit verification code sent to <span class="otp-email"><?php echo $_SESSION['registration_email']; ?></span>
+                            </p>
+                            
+                            <button type="submit" name="verify_otp" class="form-btn">
+                                <i class="fas fa-check-circle me-2"></i> Verify & Complete Registration
+                            </button>
+                            
+                            <div class="form-link">
+                                <p>Didn't receive the code? <a href="javascript:void(0)" onclick="resendOTP()">Resend OTP</a></p>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <!-- Regular registration form -->
+                        <form action="" method="post">
+                            <div class="form-group">
+                                <i class="fas fa-user icon-left"></i>
+                                <input type="text" name="name" class="form-control" required placeholder="Full Name">
+                            </div>
+                            
+                            <div class="form-group">
+                                <i class="fas fa-envelope icon-left"></i>
+                                <input type="email" name="email" class="form-control" required placeholder="Email">
+                            </div>
+                            
+                            <div class="form-group">
+                                <i class="fas fa-lock icon-left"></i>
+                                <input type="password" name="password" id="reg-password" class="form-control password" required placeholder="Password">
+                                <i class="fas fa-eye toggle-password" id="toggleRegPassword"></i>
+                            </div>
+                            
+                            <div class="form-group">
+                                <i class="fas fa-check-circle icon-left"></i>
+                                <input type="password" name="cpassword" id="cpassword" class="form-control password" required placeholder="Confirm Password">
+                                <i class="fas fa-eye toggle-password" id="toggleCPassword"></i>
+                            </div>
+                            
+                            <!-- Hidden input for user type -->
+                            <input type="hidden" name="user_type" value="user">
+                            
+                            <button type="submit" name="register_step1" class="form-btn">
+                                <i class="fas fa-user-plus me-2"></i> Continue Registration
+                            </button>
+                            
+                            <div class="form-link">
+                                <p>Already have an account? <a href="javascript:void(0)" onclick="showTab('login')">Login Now</a></p>
+                            </div>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -1312,6 +1442,13 @@ if(isset($_POST['login_submit'])){
             window.history.pushState({}, '', url);
         }
 
+        // Function to resend OTP
+        function resendOTP() {
+            // You can implement AJAX call here to resend OTP
+            // For now, we'll just submit the form again
+            window.location.href = 'index.php?resend_otp=true';
+        }
+
         // Function to scroll to top
         function scrollToTop() {
             window.scrollTo({
@@ -1341,12 +1478,6 @@ if(isset($_POST['login_submit'])){
                 this.classList.toggle('fa-eye-slash');
             });
         });
-
-        function fillAdminCredentials() {
-            document.querySelector('input[name="email"]').value = 'Admin';
-            document.querySelector('input[name="password"]').value = 'password';
-        }
     </script>
 </body>
 </html>
-
