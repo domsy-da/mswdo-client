@@ -87,6 +87,7 @@ if (isset($_POST['register_step1'])) {
 }
 
 // Process registration form - Step 2: Verify OTP and complete registration
+// Process registration form - Step 2: Verify OTP and complete registration
 if (isset($_POST['verify_otp'])) {
     $entered_otp = mysqli_real_escape_string($conn, $_POST['otp']);
     
@@ -101,10 +102,20 @@ if (isset($_POST['verify_otp'])) {
             $pass = password_hash($_SESSION['registration_password'], PASSWORD_DEFAULT);
             $user_type = 'user';
             
+            // Updated query with is_verified
             $insert = "INSERT INTO user_form(name, email, password, user_type, is_verified) VALUES(?, ?, ?, ?, 1)";
             $stmt = $conn->prepare($insert);
             $stmt->bind_param("ssss", $name, $email, $pass, $user_type);
+            
             if ($stmt->execute()) {
+                // Get the newly created user ID
+                $user_id = $stmt->insert_id;
+                
+                // Set session variables
+                $_SESSION['user_id'] = $user_id;
+                $_SESSION['user_name'] = $name;
+                $_SESSION['user_type'] = $user_type;
+                
                 // Clear registration session data
                 unset($_SESSION['registration_otp']);
                 unset($_SESSION['registration_otp_expiry']);
@@ -113,10 +124,10 @@ if (isset($_POST['verify_otp'])) {
                 unset($_SESSION['registration_password']);
                 unset($_SESSION['show_otp_form']);
                 
-                header('location: index.php');
+                header('location: user_page.php');
                 exit();
             } else {
-                $error[] = 'Registration failed. Please try again.';
+                $error[] = 'Registration failed. Please try again. Error: ' . $conn->error;
             }
             $stmt->close();
         } else {
@@ -126,7 +137,6 @@ if (isset($_POST['verify_otp'])) {
         $error[] = 'Session expired. Please start registration again.';
     }
 }
-
 // Process resend OTP
 if (isset($_GET['resend_otp']) && isset($_SESSION['registration_email'])) {
     $otp = generateOTP();
@@ -155,6 +165,7 @@ if (isset($_POST['login_submit'])) {
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
         if (password_verify($pass, $row['password'])) {
+            // Check if user is verified
             if ($row['is_verified'] == 1) {
                 $_SESSION['user_id'] = $row['id'];
                 $_SESSION['user_name'] = $row['name'];
