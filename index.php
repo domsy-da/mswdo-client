@@ -1,7 +1,8 @@
 <?php
-session_start(); // Start the session
+// index.php
+session_start();
 @include 'config.php';
-@include 'mailer.php'; // Include your PHPMailer setup file
+@include 'mailer.php';
 
 // Initialize error array
 $error = array();
@@ -16,11 +17,10 @@ function generateOTP($length = 6) {
     return $otp;
 }
 
-// Function to send OTP via email using PHPMailer
+// Function to send OTP via email (updated to use new mailer.php)
 function sendOTP($email, $otp, $name) {
     $subject = "Your OTP Verification Code - MSWDO Gloria";
     
-    // Create HTML message with better formatting
     $html_message = "
     <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;'>
         <h2 style='color: #0c5c2f;'>MSWDO Gloria - Email Verification</h2>
@@ -35,120 +35,147 @@ function sendOTP($email, $otp, $name) {
     </div>
     ";
     
-    // Plain text alternative
     $plain_message = "Hello $name,\n\nYour OTP verification code is: $otp\n\nThis code will expire in 10 minutes.\n\nBest regards,\nMSWDO Gloria Team";
     
-    // Use the sendEmail function from your mailer.php
     $result = sendEmail($email, $name, $subject, $html_message, $plain_message);
     
     return $result['success'];
 }
 
 // Process registration form - Step 1: Submit email and details
-if(isset($_POST['register_step1'])){
-   $name = mysqli_real_escape_string($conn, $_POST['name']);
-   $email = mysqli_real_escape_string($conn, $_POST['email']);
-   $pass = $_POST['password'];
-   $cpass = $_POST['cpassword'];
-   
-   // Validate inputs
-   $select = " SELECT * FROM user_form WHERE email = '$email'";
-   $result = mysqli_query($conn, $select);
+if (isset($_POST['register_step1'])) {
+    $name = mysqli_real_escape_string($conn, $_POST['name']);
+    $email = mysqli_real_escape_string($conn, $_POST['email']);
+    $pass = $_POST['password'];
+    $cpass = $_POST['cpassword'];
 
-   if(mysqli_num_rows($result) > 0){
-      $error[] = 'user already exist!';
-   } else if($pass != $cpass){
-      $error[] = 'password not matched!';
-   } else {
-      // Generate OTP and store in session
-      $otp = generateOTP();
-      $_SESSION['registration_otp'] = $otp;
-      $_SESSION['registration_name'] = $name;
-      $_SESSION['registration_email'] = $email;
-      $_SESSION['registration_password'] = $pass;
-      
-      // Send OTP to user's email using PHPMailer
-      if(sendOTP($email, $otp, $name)) {
-         // Show OTP input form
-         $_SESSION['show_otp_form'] = true;
-      } else {
-         $error[] = 'Failed to send OTP. Please check your email address and try again.';
-      }
-   }
+    // Validate email format
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error[] = 'Invalid email format!';
+    } else {
+        // Check if user already exists
+        $select = "SELECT * FROM user_form WHERE email = ?";
+        $stmt = $conn->prepare($select);
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows > 0) {
+            $error[] = 'User already exists!';
+        } else {
+            if ($pass !== $cpass) {
+                $error[] = 'Passwords do not match!';
+            } else {
+                // Generate OTP and store in session
+                $otp = generateOTP();
+                $_SESSION['registration_otp'] = $otp;
+                $_SESSION['registration_otp_expiry'] = time() + 600; // 10 minutes expiry
+                $_SESSION['registration_name'] = $name;
+                $_SESSION['registration_email'] = $email;
+                $_SESSION['registration_password'] = $pass;
+                
+                // Send OTP to user's email
+                if (sendOTP($email, $otp, $name)) {
+                    $_SESSION['show_otp_form'] = true;
+                } else {
+                    $error[] = 'Failed to send OTP. Please check your email address and try again.';
+                }
+            }
+        }
+        $stmt->close();
+    }
 }
 
 // Process registration form - Step 2: Verify OTP and complete registration
-if(isset($_POST['verify_otp'])){
-   $entered_otp = mysqli_real_escape_string($conn, $_POST['otp']);
-   
-   // Verify OTP
-   if(isset($_SESSION['registration_otp']) && $_SESSION['registration_otp'] == $entered_otp) {
-      // OTP is correct, proceed with registration
-      $name = $_SESSION['registration_name'];
-      $email = $_SESSION['registration_email'];
-      $pass = md5($_SESSION['registration_password']); // Hash password for storage
-      $user_type = 'user';
-      
-      $insert = "INSERT INTO user_form(name, email, password, user_type) VALUES('$name','$email','$pass','$user_type')";
-      if(mysqli_query($conn, $insert)) {
-         // Clear registration session data
-         unset($_SESSION['registration_otp']);
-         unset($_SESSION['registration_name']);
-         unset($_SESSION['registration_email']);
-         unset($_SESSION['registration_password']);
-         unset($_SESSION['show_otp_form']);
-         
-         // Redirect to login
-         header('location:index.php');
-         exit();
-      } else {
-         $error[] = 'Registration failed. Please try again.';
-      }
-   } else {
-      $error[] = 'Invalid OTP. Please try again.';
-   }
+if (isset($_POST['verify_otp'])) {
+    $entered_otp = mysqli_real_escape_string($conn, $_POST['otp']);
+    
+    // Verify OTP and check expiry
+    if (isset($_SESSION['registration_otp']) && isset($_SESSION['registration_otp_expiry'])) {
+        if (time() > $_SESSION['registration_otp_expiry']) {
+            $error[] = 'OTP has expired. Please request a new one.';
+        } elseif ($_SESSION['registration_otp'] == $entered_otp) {
+            // OTP is correct, proceed with registration
+            $name = $_SESSION['registration_name'];
+            $email = $_SESSION['registration_email'];
+            $pass = password_hash($_SESSION['registration_password'], PASSWORD_DEFAULT);
+            $user_type = 'user';
+            
+            $insert = "INSERT INTO user_form(name, email, password, user_type, is_verified) VALUES(?, ?, ?, ?, 1)";
+            $stmt = $conn->prepare($insert);
+            $stmt->bind_param("ssss", $name, $email, $pass, $user_type);
+            if ($stmt->execute()) {
+                // Clear registration session data
+                unset($_SESSION['registration_otp']);
+                unset($_SESSION['registration_otp_expiry']);
+                unset($_SESSION['registration_name']);
+                unset($_SESSION['registration_email']);
+                unset($_SESSION['registration_password']);
+                unset($_SESSION['show_otp_form']);
+                
+                header('location: index.php');
+                exit();
+            } else {
+                $error[] = 'Registration failed. Please try again.';
+            }
+            $stmt->close();
+        } else {
+            $error[] = 'Invalid OTP. Please try again.';
+        }
+    } else {
+        $error[] = 'Session expired. Please start registration again.';
+    }
+}
+
+// Process resend OTP
+if (isset($_GET['resend_otp']) && isset($_SESSION['registration_email'])) {
+    $otp = generateOTP();
+    $_SESSION['registration_otp'] = $otp;
+    $_SESSION['registration_otp_expiry'] = time() + 600;
+    
+    if (sendOTP($_SESSION['registration_email'], $otp, $_SESSION['registration_name'])) {
+        $_SESSION['show_otp_form'] = true;
+        $success_msg = 'New OTP sent to your email.';
+    } else {
+        $error[] = 'Failed to resend OTP. Please try again.';
+    }
 }
 
 // Process login form
-if(isset($_POST['login_submit'])){
-   $email = mysqli_real_escape_string($conn, $_POST['email']);
-   $pass = $_POST['password']; // Get the raw password for admin check
-   
-   // Check for hardcoded admin credentials
-   if(($email === 'Admin' || $email === 'Admin@gmail.com') && $pass === 'password'){
-      // Set admin session variables
-      $_SESSION['user_id'] = 1; // Using 1 as the admin ID
-      $_SESSION['user_name'] = 'Administrator';
-      $_SESSION['user_type'] = 'admin';
-      
-      // Redirect to admin dashboard
-      header('location:admin_dashboard.php');
-      exit();
-   }
-   
-   // If not admin, proceed with normal user login
-   $md5_pass = md5($pass);
-   $select = " SELECT * FROM user_form WHERE email = '$email' && password = '$md5_pass' ";
-
-   $result = mysqli_query($conn, $select);
-
-   if(mysqli_num_rows($result) > 0){
-      $row = mysqli_fetch_array($result);
-
-      if($row['user_type'] == 'admin'){
-         $_SESSION['admin_name'] = $row['name'];
-         $_SESSION['user_id'] = $row['id']; // Add this line to set user_id
-         header('location:admin_page.php');
-         exit(); // Added exit after redirect
-      }elseif($row['user_type'] == 'user'){
-         $_SESSION['user_name'] = $row['name'];
-         $_SESSION['user_id'] = $row['id']; // Add this line to set user_id
-         header('location:user_page.php');
-         exit(); // Added exit after redirect
-      }
-   }else{
-      $error[] = 'incorrect email or password!';
-   }
+if (isset($_POST['login_submit'])) {
+    $email = mysqli_real_escape_string($conn, $_POST['email']);
+    $pass = $_POST['password'];
+    
+    $select = "SELECT * FROM user_form WHERE email = ?";
+    $stmt = $conn->prepare($select);
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        if (password_verify($pass, $row['password'])) {
+            if ($row['is_verified'] == 1) {
+                $_SESSION['user_id'] = $row['id'];
+                $_SESSION['user_name'] = $row['name'];
+                $_SESSION['user_type'] = $row['user_type'];
+                
+                if ($row['user_type'] == 'admin') {
+                    header('location: admin_dashboard.php');
+                } else {
+                    header('location: user_page.php');
+                }
+                exit();
+            } else {
+                $error[] = 'Please verify your email before logging in.';
+            }
+        } else {
+            $error[] = 'Incorrect email or password!';
+        }
+    } else {
+        $error[] = 'Incorrect email or password!';
+    }
+    $stmt->close();
 }
 ?>
 
@@ -167,6 +194,7 @@ if(isset($_POST['login_submit'])){
     <!-- AOS Animation Library -->
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <style>
+        /* Your existing CSS remains unchanged */
         :root {
             --primary-color: #0c5c2f;
             --secondary-color: #1a2e36;
@@ -254,7 +282,6 @@ if(isset($_POST['login_submit'])){
 
         /* Hero Section */
         .hero {
-           
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -500,31 +527,6 @@ if(isset($_POST['login_submit'])){
         .otp-email {
             font-weight: 600;
             color: var(--primary-color);
-        }
-
-        /* Admin Login Link */
-        .admin-login-link {
-            margin-top: 15px;
-            text-align: center;
-            padding-top: 15px;
-            border-top: 1px dashed #dee2e6;
-        }
-
-        .admin-login-link a {
-            display: inline-flex;
-            align-items: center;
-            color: #6c757d;
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-        }
-
-        .admin-login-link a:hover {
-            color: var(--secondary-color);
-        }
-
-        .admin-login-link i {
-            margin-right: 5px;
         }
 
         /* About Section */
@@ -1095,11 +1097,14 @@ if(isset($_POST['login_submit'])){
                 <!-- Login Form -->
                 <div id="login-form" style="display: <?php echo (!isset($_GET['register']) && !isset($_SESSION['show_otp_form'])) ? 'block' : 'none'; ?>">
                     <?php
-                    if(isset($error) && isset($_POST['login_submit'])){
-                        foreach($error as $err){
-                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>'.$err.'</span>';
-                        };
-                    };
+                    if (isset($error) && isset($_POST['login_submit'])) {
+                        foreach ($error as $err) {
+                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($err) . '</span>';
+                        }
+                    }
+                    if (isset($success_msg)) {
+                        echo '<span class="success-msg"><i class="fas fa-check-circle me-2"></i>' . htmlspecialchars($success_msg) . '</span>';
+                    }
                     ?>
                     <form action="" method="post">
                         <div class="form-group">
@@ -1126,17 +1131,20 @@ if(isset($_POST['login_submit'])){
                 <!-- Register Form -->
                 <div id="register-form" style="display: <?php echo (isset($_GET['register']) || isset($_SESSION['show_otp_form'])) ? 'block' : 'none'; ?>">
                     <?php
-                    if(isset($error) && (isset($_POST['register_step1']) || isset($_POST['verify_otp']))){
-                        foreach($error as $err){
-                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>'.$err.'</span>';
-                        };
-                    };
+                    if (isset($error) && (isset($_POST['register_step1']) || isset($_POST['verify_otp']))) {
+                        foreach ($error as $err) {
+                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>' . htmlspecialchars($err) . '</span>';
+                        }
+                    }
+                    if (isset($success_msg)) {
+                        echo '<span class="success-msg"><i class="fas fa-check-circle me-2"></i>' . htmlspecialchars($success_msg) . '</span>';
+                    }
                     
                     // Show OTP verification form if OTP has been sent
-                    if(isset($_SESSION['show_otp_form']) && $_SESSION['show_otp_form'] === true): 
+                    if (isset($_SESSION['show_otp_form']) && $_SESSION['show_otp_form'] === true):
                     ?>
                         <div class="success-msg">
-                            <i class="fas fa-check-circle me-2"></i> OTP has been sent to your email: <?php echo $_SESSION['registration_email']; ?>
+                            <i class="fas fa-check-circle me-2"></i> OTP has been sent to your email: <?php echo htmlspecialchars($_SESSION['registration_email']); ?>
                         </div>
                         <form action="" method="post">
                             <div class="form-group">
@@ -1145,7 +1153,7 @@ if(isset($_POST['login_submit'])){
                             </div>
                             
                             <p class="otp-message">
-                                Please enter the 6-digit verification code sent to <span class="otp-email"><?php echo $_SESSION['registration_email']; ?></span>
+                                Please enter the 6-digit verification code sent to <span class="otp-email"><?php echo htmlspecialchars($_SESSION['registration_email']); ?></span>
                             </p>
                             
                             <button type="submit" name="verify_otp" class="form-btn">
@@ -1153,7 +1161,7 @@ if(isset($_POST['login_submit'])){
                             </button>
                             
                             <div class="form-link">
-                                <p>Didn't receive the code? <a href="javascript:void(0)" onclick="resendOTP()">Resend OTP</a></p>
+                                <p>Didn't receive the code? <a href="?resend_otp=true">Resend OTP</a></p>
                             </div>
                         </form>
                     <?php else: ?>
@@ -1180,9 +1188,6 @@ if(isset($_POST['login_submit'])){
                                 <input type="password" name="cpassword" id="cpassword" class="form-control password" required placeholder="Confirm Password">
                                 <i class="fas fa-eye toggle-password" id="toggleCPassword"></i>
                             </div>
-                            
-                            <!-- Hidden input for user type -->
-                            <input type="hidden" name="user_type" value="user">
                             
                             <button type="submit" name="register_step1" class="form-btn">
                                 <i class="fas fa-user-plus me-2"></i> Continue Registration
@@ -1357,7 +1362,6 @@ if(isset($_POST['login_submit'])){
                     </div>
                 </div>
                 <div class="contact-map" data-aos="fade-left" data-aos-delay="300">
-                    <!-- Replace with actual Google Maps embed code for Gloria, Oriental Mindoro -->
                     <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123939.95165916862!2d121.41660259726562!3d13.099999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x33bcf9f93b29c91f%3A0x3b06d7b27da7c4a0!2sGloria%2C%20Oriental%20Mindoro!5e0!3m2!1sen!2sph!4v1648226000000!5m2!1sen!2sph" allowfullscreen="" loading="lazy"></iframe>
                 </div>
             </div>
@@ -1404,7 +1408,7 @@ if(isset($_POST['login_submit'])){
             </div>
         </div>
         <div class="copyright">
-            &copy; 2024 MSWDO Gloria. All rights reserved.
+            © 2024 MSWDO Gloria. All rights reserved.
         </div>
     </footer>
 
@@ -1442,13 +1446,6 @@ if(isset($_POST['login_submit'])){
             window.history.pushState({}, '', url);
         }
 
-        // Function to resend OTP
-        function resendOTP() {
-            // You can implement AJAX call here to resend OTP
-            // For now, we'll just submit the form again
-            window.location.href = 'index.php?resend_otp=true';
-        }
-
         // Function to scroll to top
         function scrollToTop() {
             window.scrollTo({
@@ -1469,7 +1466,7 @@ if(isset($_POST['login_submit'])){
 
         // Password toggle functionality
         document.querySelectorAll('.toggle-password').forEach(function(toggleButton) {
-            toggleButton.style.display = 'block'; // Show the toggle icons
+            toggleButton.style.display = 'block';
             toggleButton.addEventListener('click', function() {
                 const passwordInput = this.closest('.form-group').querySelector('.form-control.password');
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
