@@ -10,14 +10,7 @@ require 'PHPMailer/PHPMailer.php';
 require 'PHPMailer/SMTP.php';
 
 /**
- * Function to send email using PHPMailer
- * 
- * @param string $to_email Recipient email
- * @param string $to_name Recipient name
- * @param string $subject Email subject
- * @param string $html_message HTML message content
- * @param string $plain_message Plain text message (optional)
- * @return array Success status and message
+ * Function to send email using PHPMailer with Gmail SMTP
  */
 function sendEmail($to_email, $to_name, $subject, $html_message, $plain_message = '') {
     $mail = new PHPMailer(true);
@@ -28,11 +21,12 @@ function sendEmail($to_email, $to_name, $subject, $html_message, $plain_message 
         $mail->Host = 'smtp.gmail.com';
         $mail->SMTPAuth = true;
         $mail->Username = 'alexandersiasatmain@gmail.com'; // Your Gmail
-        $mail->Password = 'etxj llae shxv aest'; // Your App Password
+        $mail->Password = 'zwzs oguu fsjh xkmh'; // Use App Password, not regular password
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
+        $mail->Port = 465;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;// Enable verbose debug output
         
-        // Important security settings for localhost
+        // Bypass SSL verification (for localhost only)
         $mail->SMTPOptions = [
             'ssl' => [
                 'verify_peer' => false,
@@ -42,9 +36,10 @@ function sendEmail($to_email, $to_name, $subject, $html_message, $plain_message 
         ];
         
         // Sender (must match your Gmail)
-        $mail->setFrom('alexandersiasatmain@gmail.com', 'MSWDO Gloria'); 
+        $mail->setFrom('alexandersiasatmain@gmail.com', 'MSWDO Gloria');
+        $mail->addReplyTo('noreply@mswdo-gloria.com', 'MSWDO Do Not Reply');
         
-        // Recipient (will work for any email now)
+        // Recipient
         $mail->addAddress($to_email, $to_name);
         
         // Content
@@ -53,31 +48,54 @@ function sendEmail($to_email, $to_name, $subject, $html_message, $plain_message 
         $mail->Body = $html_message;
         $mail->AltBody = $plain_message ?: strip_tags($html_message);
         
-        $mail->send();
+        // Add DKIM signing (helps with delivery)
+        $mail->DKIM_domain = 'gmail.com';
+        $mail->DKIM_selector = 'google';
+        $mail->DKIM_passphrase = '';
+        
+        if (!$mail->send()) {
+            throw new Exception('Mailer Error: ' . $mail->ErrorInfo);
+        }
+        
         return ['success' => true, 'message' => 'Email sent successfully'];
+        
     } catch (Exception $e) {
-        return ['success' => false, 'message' => "Email could not be sent. Mailer Error: {$mail->ErrorInfo}"];
+        // Log the complete error for debugging
+        error_log("Email failed to $to_email. Error: " . $e->getMessage());
+        
+        return [
+            'success' => false,
+            'message' => "Email could not be sent. Please try again later.",
+            'error' => $e->getMessage() // Only show this in development
+        ];
     }
 }
 
 /**
- * Function to test email configuration
- * Uncomment and use this function to test your email setup
+ * Test function - uncomment to verify your setup
  */
 /*
-function testEmailConfig() {
+function testEmail() {
+    $test_email = 'recipient@example.com'; // Change to a real email
     $result = sendEmail(
-        'your-test-email@example.com', 
-        'Test User', 
-        'MSWDO Email Test', 
-        '<h1>Test Email</h1><p>This is a test email to verify the MSWDO email system is working correctly.</p>'
+        $test_email,
+        'Test User',
+        'MSWDO System Test',
+        '<h1>Test Email</h1><p>This confirms your email settings are working.</p>',
+        'Test Email - Text Version'
     );
     
     echo '<pre>';
     print_r($result);
     echo '</pre>';
+    
+    if ($result['success']) {
+        echo "Check the inbox of $test_email for the test message.";
+    } else {
+        echo "Failed to send. Error: " . $result['error'];
+    }
 }
-// Call the test function - remove this in production
-// testEmailConfig();
+
+testEmail(); // Run the test
 */
 ?>
