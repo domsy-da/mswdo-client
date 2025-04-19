@@ -139,33 +139,40 @@ if (isset($_POST['mark_success'])) {
           </html>
           ";
           
-  // Send email notification to the user using their email from user_form table
-try {
-    // First validate the email address
-    if (!filter_var($user_email, FILTER_VALIDATE_EMAIL)) {
-        throw new Exception("Invalid email format for user $user_id");
-    }
+          // Send email notification to the user using their email from user_form table
+          try {
+              // First validate the email address
+              if (!filter_var($user_email, FILTER_VALIDATE_EMAIL)) {
+                  throw new Exception("Invalid email format for user $user_id");
+              }
 
-    $email_result = sendEmail($user_email, $user_name, $subject, $html_message);
-    
-    if ($email_result['success']) {
-        $success_msg = "Application marked as successful and notification email sent to $user_email!";
-        error_log("Successfully sent email to $user_email for application #$application_id");
-    } else {
-        // Log the detailed error but show a user-friendly message
-        error_log("Email failed for application #$application_id. User: $user_email. Error: " . $email_result['error']);
-        $error_msg = "Application marked as successful but email notification failed. We've logged the issue.";
-        
-        // Optional: Store failed emails in database for retry later
-        $sql = "INSERT INTO failed_emails (user_id, application_id, error_message) VALUES (?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("iis", $user_id, $application_id, $email_result['error']);
-        $stmt->execute();
-        $stmt->close();
-    }
-} catch (Exception $e) {
-    error_log("Email system error for application #$application_id: " . $e->getMessage());
-    $error_msg = "Application marked as successful but we encountered an email system error.";
+              $email_result = sendEmail($user_email, $user_name, $subject, $html_message);
+              
+              if ($email_result['success']) {
+                  $success_msg = "Application marked as successful and notification email sent to $user_email!";
+                  error_log("Successfully sent email to $user_email for application #$application_id");
+              } else {
+                  // Log the detailed error but show a user-friendly message
+                  error_log("Email failed for application #$application_id. User: $user_email. Error: " . $email_result['error']);
+                  $error_msg = "Application marked as successful but email notification failed. We've logged the issue.";
+                  
+                  // Optional: Store failed emails in database for retry later
+                  $sql = "INSERT INTO failed_emails (user_id, application_id, error_message) VALUES (?, ?, ?)";
+                  $stmt = $conn->prepare($sql);
+                  $stmt->bind_param("iis", $user_id, $application_id, $email_result['error']);
+                  $stmt->execute();
+                  $stmt->close();
+              }
+          } catch (Exception $e) {
+              error_log("Email system error for application #$application_id: " . $e->getMessage());
+              $error_msg = "Application marked as successful but we encountered an email system error.";
+          }
+      } else {
+          $error_msg = "Error: Application not found.";
+      }
+  } catch (Exception $e) {
+      $error_msg = "Database error: " . $e->getMessage();
+  }
 }
 
 // Initialize search query and status filter variables
@@ -1109,4 +1116,4 @@ try {
   </script>
 </body>
 </html>
-
+    
