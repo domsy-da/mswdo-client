@@ -787,7 +787,14 @@ if ($result) {
                         <div class="form-group">
                             <label for="user_type">Account Type</label>
                             <select class="form-select" id="user_type" name="user_type" required>
-                           
+                            <div class="form-group">
+                            <label for="user_type">Account Type</label>
+                            <select class="form-select" id="user_type" name="user_type" required>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                                                
                            
                             </select>
                         </div>
@@ -801,42 +808,87 @@ if ($result) {
         </div>
     </div>
 
-    <!-- Edit User Modal -->
-    <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form action="" method="post">
-                    <div class="modal-body">
-                        <input type="hidden" id="edit_user_id" name="user_id">
-                        <div class="form-group">
-                            <label for="edit_name">Full Name</label>
-                            <input type="text" class="form-control" id="edit_name" name="name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="edit_email">Email Address</label>
-                            <input type="email" class="form-control" id="edit_email" name="email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="edit_password">Password</label>
-                            <input type="password" class="form-control" id="edit_password" name="password" placeholder="Leave blank to keep current password">
-                            <small class="text-muted">Leave blank to keep current password</small>
-                        </div>
-                      
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="edit_user" class="btn btn-success">Update User</button>
-                    </div>
-                </form>
+  <!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+            <form action="" method="post">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="name">Full Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="user_type">Account Type</label>
+                        <select class="form-select" id="user_type" name="user_type" required>
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_user" class="btn btn-primary">Add User</button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <!-- Delete User Modal -->
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="" method="post">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_user_id" name="user_id">
+                    <div class="form-group">
+                        <label for="edit_name">Full Name</label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_email">Email Address</label>
+                        <input type="email" class="form-control" id="edit_email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_password">Password</label>
+                        <input type="password" class="form-control" id="edit_password" name="password" placeholder="Leave blank to keep current password">
+                        <small class="text-muted">Leave blank to keep current password</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_user_type">Account Type</label>
+                        <select class="form-select" id="edit_user_type" name="user_type" required>
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="edit_user" class="btn btn-success">Update User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+     <!-- Delete User Modal -->
     <div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">

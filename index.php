@@ -1,11 +1,10 @@
 <?php
-session_start();
+session_start(); // Start the session
 @include 'config.php';
-@include 'mailer.php';
+@include 'mailer.php'; // Include your PHPMailer setup file
 
 // Initialize error array
 $error = array();
-$success_msg = '';
 
 // Function to generate OTP
 function generateOTP($length = 6) {
@@ -17,295 +16,138 @@ function generateOTP($length = 6) {
     return $otp;
 }
 
-// Function to send OTP via email
-function sendLoginOTP($email, $otp, $name) {
-    $subject = "Your Login OTP Verification Code - MSWDO Gloria";
+// Function to send OTP via email using PHPMailer
+function sendOTP($email, $otp, $name) {
+    $subject = "Your OTP Verification Code - MSWDO Gloria";
     
+    // Create HTML message with better formatting
     $html_message = "
     <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;'>
-        <h2 style='color: #0c5c2f;'>MSWDO Gloria - Login Verification</h2>
+        <h2 style='color: #0c5c2f;'>MSWDO Gloria - Email Verification</h2>
         <p>Hello $name,</p>
-        <p>You are attempting to log in to your MSWDO Gloria account. Please use the following verification code to complete your login:</p>
+        <p>Thank you for registering with MSWDO Gloria. Please use the following verification code to complete your registration:</p>
         <div style='background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;'>
             $otp
         </div>
         <p>This code will expire in 10 minutes.</p>
-        <p>If you did not request this verification, please ignore this email or contact us immediately if you believe your account has been compromised.</p>
+        <p>If you did not request this verification, please ignore this email.</p>
         <p>Best regards,<br>MSWDO Gloria Team</p>
     </div>
     ";
     
-    $plain_message = "Hello $name,\n\nYour OTP verification code for login is: $otp\n\nThis code will expire in 10 minutes.\n\nBest regards,\nMSWDO Gloria Team";
+    // Plain text alternative
+    $plain_message = "Hello $name,\n\nYour OTP verification code is: $otp\n\nThis code will expire in 10 minutes.\n\nBest regards,\nMSWDO Gloria Team";
     
+    // Use the sendEmail function from your mailer.php
     $result = sendEmail($email, $name, $subject, $html_message, $plain_message);
     
     return $result['success'];
 }
 
-// Step 1: Handle email submission for OTP
-if (isset($_POST['request_otp'])) {
-    $email = mysqli_real_escape_string($conn, $_POST['email']);
-    
-    // Validate email format
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error[] = 'Invalid email format!';
-    } else {
-        // Check if user exists
-        $select = "SELECT * FROM user_form WHERE email = ?";
-        $stmt = $conn->prepare($select);
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            
-            // Generate OTP and store in session
-            $otp = generateOTP();
-            $_SESSION['login_otp'] = $otp;
-            $_SESSION['login_otp_expiry'] = time() + 600; // 10 minutes expiry
-            $_SESSION['login_email'] = $email;
-            $_SESSION['login_user_id'] = $row['id'];
-            $_SESSION['login_user_name'] = $row['name'];
-            $_SESSION['login_user_type'] = $row['user_type'];
-            
-            // Send OTP to user's email
-            if (sendLoginOTP($email, $otp, $row['name'])) {
-                $_SESSION['show_otp_login_form'] = true;
-                $success_msg = "OTP has been sent to your email address.";
-            } else {
-                $error[] = 'Failed to send OTP. Please check your email address and try again.';
-            }
-        } else {
-            $error[] = 'No account found with this email address!';
-        }
-        $stmt->close();
-    }
-}
-
-// Step 2: Verify OTP and complete login
-if (isset($_POST['verify_login_otp'])) {
-    $entered_otp = mysqli_real_escape_string($conn, $_POST['otp']);
-    
-    // Verify OTP and check expiry
-    if (isset($_SESSION['login_otp']) && isset($_SESSION['login_otp_expiry'])) {
-        if (time() > $_SESSION['login_otp_expiry']) {
-            $error[] = 'OTP has expired. Please request a new one.';
-        } elseif ($_SESSION['login_otp'] == $entered_otp) {
-            // OTP is correct, complete login
-            $_SESSION['user_id'] = $_SESSION['login_user_id'];
-            $_SESSION['user_name'] = $_SESSION['login_user_name'];
-            $_SESSION['user_type'] = $_SESSION['login_user_type'];
-            
-            // Clear login session data
-            unset($_SESSION['login_otp']);
-            unset($_SESSION['login_otp_expiry']);
-            unset($_SESSION['login_email']);
-            unset($_SESSION['login_user_id']);
-            unset($_SESSION['login_user_name']);
-            unset($_SESSION['login_user_type']);
-            unset($_SESSION['show_otp_login_form']);
-            
-            // Redirect based on user type
-            if ($_SESSION['user_type'] == 'admin') {
-                header('location: admin_dashboard.php');
-            } else {
-                header('location: user_page.php');
-            }
-            exit();
-        } else {
-            $error[] = 'Invalid OTP. Please try again.';
-        }
-    } else {
-        $error[] = 'Session expired. Please start login again.';
-    }
-}
-
-// Process resend OTP
-if (isset($_GET['resend_login_otp']) && isset($_SESSION['login_email'])) {
-    $otp = generateOTP();
-    $_SESSION['login_otp'] = $otp;
-    $_SESSION['login_otp_expiry'] = time() + 600;
-    
-    if (sendLoginOTP($_SESSION['login_email'], $otp, $_SESSION['login_user_name'])) {
-        $_SESSION['show_otp_login_form'] = true;
-        $success_msg = 'New OTP sent to your email.';
-    } else {
-        $error[] = 'Failed to resend OTP. Please try again.';
-    }
-}
-
-// Handle regular login form
-if(isset($_POST['submit'])){
-   $email = mysqli_real_escape_string($conn, $_POST['email']);
-   $pass = md5($_POST['password']);
-
-   $select = "SELECT * FROM user_form WHERE email = ? AND password = ?";
-   $stmt = $conn->prepare($select);
-   $stmt->bind_param("ss", $email, $pass);
-   $stmt->execute();
-   $result = $stmt->get_result();
-
-   if($result->num_rows > 0){
-      $row = $result->fetch_assoc();
-      $_SESSION['user_id'] = $row['id'];
-      $_SESSION['user_name'] = $row['name'];
-      $_SESSION['user_type'] = $row['user_type'];
-
-      if($row['user_type'] == 'admin'){
-         header('location:admin_dashboard.php');
-      }elseif($row['user_type'] == 'user'){
-         header('location:user_page.php');
-      }
-   }else{
-      $error[] = 'Incorrect email or password!';
-   }
-   $stmt->close();
-}
-
-// Handle user registration
-if(isset($_POST['register'])){
+// Process registration form - Step 1: Submit email and details
+if(isset($_POST['register_step1'])){
    $name = mysqli_real_escape_string($conn, $_POST['name']);
    $email = mysqli_real_escape_string($conn, $_POST['email']);
-   $pass = mysqli_real_escape_string($conn, $_POST['password']);
-   $cpass = mysqli_real_escape_string($conn, $_POST['cpassword']);
-   $user_type = 'user';
+   $pass = $_POST['password'];
+   $cpass = $_POST['cpassword'];
+   
+   // Validate inputs
+   $select = " SELECT * FROM user_form WHERE email = '$email'";
+   $result = mysqli_query($conn, $select);
 
-   // Check if email already exists
-   $select = "SELECT * FROM user_form WHERE email = ?";
-   $stmt = $conn->prepare($select);
-   $stmt->bind_param("s", $email);
-   $stmt->execute();
-   $result = $stmt->get_result();
-
-   if($result->num_rows > 0){
-      $error[] = 'User already exists!';
-   }else{
-      if($pass != $cpass){
-         $error[] = 'Passwords do not match!';
-      }else{
-         // Generate OTP for email verification
-         $verification_otp = generateOTP();
-         $hashed_password = password_hash($pass, PASSWORD_BCRYPT);
-         
-         // Store user data and OTP in session for verification
-         $_SESSION['register_name'] = $name;
-         $_SESSION['register_email'] = $email;
-         $_SESSION['register_password'] = $hashed_password;
-         $_SESSION['register_otp'] = $verification_otp;
-         $_SESSION['register_otp_expiry'] = time() + 600; // 10 minutes expiry
-         
-         // Send verification OTP
-         $subject = "Email Verification - MSWDO Gloria";
-         
-         $html_message = "
-         <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;'>
-             <h2 style='color: #0c5c2f;'>MSWDO Gloria - Email Verification</h2>
-             <p>Hello $name,</p>
-             <p>Thank you for registering with MSWDO Gloria. Please use the following verification code to complete your registration:</p>
-             <div style='background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;'>
-                 $verification_otp
-             </div>
-             <p>This code will expire in 10 minutes.</p>
-             <p>If you did not request this verification, please ignore this email.</p>
-             <p>Best regards,<br>MSWDO Gloria Team</p>
-         </div>
-         ";
-         
-         $plain_message = "Hello $name,\n\nYour verification code is: $verification_otp\n\nThis code will expire in 10 minutes.\n\nBest regards,\nMSWDO Gloria Team";
-         
-         $result = sendEmail($email, $name, $subject, $html_message, $plain_message);
-         
-         if($result['success']){
-            $_SESSION['show_verification_form'] = true;
-            $success_msg = "Verification code has been sent to your email.";
-         }else{
-            $error[] = 'Failed to send verification email. Please try again.';
-         }
+   if(mysqli_num_rows($result) > 0){
+      $error[] = 'user already exist!';
+   } else if($pass != $cpass){
+      $error[] = 'password not matched!';
+   } else {
+      // Generate OTP and store in session
+      $otp = generateOTP();
+      $_SESSION['registration_otp'] = $otp;
+      $_SESSION['registration_name'] = $name;
+      $_SESSION['registration_email'] = $email;
+      $_SESSION['registration_password'] = $pass;
+      
+      // Send OTP to user's email using PHPMailer
+      if(sendOTP($email, $otp, $name)) {
+         // Show OTP input form
+         $_SESSION['show_otp_form'] = true;
+      } else {
+         $error[] = 'Failed to send OTP. Please check your email address and try again.';
       }
    }
-   $stmt->close();
 }
 
-// Handle OTP verification for registration
-if(isset($_POST['verify_registration'])){
-   $entered_otp = mysqli_real_escape_string($conn, $_POST['verification_otp']);
+// Process registration form - Step 2: Verify OTP and complete registration
+if(isset($_POST['verify_otp'])){
+   $entered_otp = mysqli_real_escape_string($conn, $_POST['otp']);
    
-   if(isset($_SESSION['register_otp']) && isset($_SESSION['register_otp_expiry'])){
-      if(time() > $_SESSION['register_otp_expiry']){
-         $error[] = 'Verification code has expired. Please register again.';
-         unset($_SESSION['show_verification_form']);
-         unset($_SESSION['register_name']);
-         unset($_SESSION['register_email']);
-         unset($_SESSION['register_password']);
-         unset($_SESSION['register_otp']);
-         unset($_SESSION['register_otp_expiry']);
-      }elseif($_SESSION['register_otp'] == $entered_otp){
-         // OTP is correct, complete registration
-         $name = $_SESSION['register_name'];
-         $email = $_SESSION['register_email'];
-         $password = $_SESSION['register_password'];
-         $user_type = 'user';
-         $is_verified = 1;
-         
-         $insert = "INSERT INTO user_form(name, email, password, user_type, is_verified) VALUES(?,?,?,?,?)";
-         $stmt = $conn->prepare($insert);
-         $stmt->bind_param("ssssi", $name, $email, $password, $user_type, $is_verified);
-         $stmt->execute();
-         $stmt->close();
-         
+   // Verify OTP
+   if(isset($_SESSION['registration_otp']) && $_SESSION['registration_otp'] == $entered_otp) {
+      // OTP is correct, proceed with registration
+      $name = $_SESSION['registration_name'];
+      $email = $_SESSION['registration_email'];
+      $pass = md5($_SESSION['registration_password']); // Hash password for storage
+      $user_type = 'user';
+      
+      $insert = "INSERT INTO user_form(name, email, password, user_type) VALUES('$name','$email','$pass','$user_type')";
+      if(mysqli_query($conn, $insert)) {
          // Clear registration session data
-         unset($_SESSION['show_verification_form']);
-         unset($_SESSION['register_name']);
-         unset($_SESSION['register_email']);
-         unset($_SESSION['register_password']);
-         unset($_SESSION['register_otp']);
-         unset($_SESSION['register_otp_expiry']);
+         unset($_SESSION['registration_otp']);
+         unset($_SESSION['registration_name']);
+         unset($_SESSION['registration_email']);
+         unset($_SESSION['registration_password']);
+         unset($_SESSION['show_otp_form']);
          
-         $success_msg = 'Registration successful! You can now login.';
-      }else{
-         $error[] = 'Invalid verification code. Please try again.';
+         // Redirect to login
+         header('location:index.php');
+         exit();
+      } else {
+         $error[] = 'Registration failed. Please try again.';
       }
-   }else{
-      $error[] = 'Session expired. Please register again.';
-      unset($_SESSION['show_verification_form']);
+   } else {
+      $error[] = 'Invalid OTP. Please try again.';
    }
 }
 
-// Process resend verification OTP
-if(isset($_GET['resend_verification_otp']) && isset($_SESSION['register_email'])){
-   $verification_otp = generateOTP();
-   $_SESSION['register_otp'] = $verification_otp;
-   $_SESSION['register_otp_expiry'] = time() + 600;
+// Process login form
+if(isset($_POST['login_submit'])){
+   $email = mysqli_real_escape_string($conn, $_POST['email']);
+   $pass = $_POST['password']; // Get the raw password for admin check
    
-   $name = $_SESSION['register_name'];
-   $email = $_SESSION['register_email'];
+   // Check for hardcoded admin credentials
+   if(($email === 'Admin' || $email === 'Admin@gmail.com') && $pass === 'password'){
+      // Set admin session variables
+      $_SESSION['user_id'] = 1; // Using 1 as the admin ID
+      $_SESSION['user_name'] = 'Administrator';
+      $_SESSION['user_type'] = 'admin';
+      
+      // Redirect to admin dashboard
+      header('location:admin_dashboard.php');
+      exit();
+   }
    
-   $subject = "Email Verification - MSWDO Gloria";
-   
-   $html_message = "
-   <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;'>
-       <h2 style='color: #0c5c2f;'>MSWDO Gloria - Email Verification</h2>
-       <p>Hello $name,</p>
-       <p>Here is your new verification code to complete your registration:</p>
-       <div style='background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;'>
-           $verification_otp
-       </div>
-       <p>This code will expire in 10 minutes.</p>
-       <p>If you did not request this verification, please ignore this email.</p>
-       <p>Best regards,<br>MSWDO Gloria Team</p>
-   </div>
-   ";
-   
-   $plain_message = "Hello $name,\n\nYour new verification code is: $verification_otp\n\nThis code will expire in 10 minutes.\n\nBest regards,\nMSWDO Gloria Team";
-   
-   $result = sendEmail($email, $name, $subject, $html_message, $plain_message);
-   
-   if($result['success']){
-      $_SESSION['show_verification_form'] = true;
-      $success_msg = 'New verification code sent to your email.';
+   // If not admin, proceed with normal user login
+   $md5_pass = md5($pass);
+   $select = " SELECT * FROM user_form WHERE email = '$email' && password = '$md5_pass' ";
+
+   $result = mysqli_query($conn, $select);
+
+   if(mysqli_num_rows($result) > 0){
+      $row = mysqli_fetch_array($result);
+
+      if($row['user_type'] == 'admin'){
+         $_SESSION['admin_name'] = $row['name'];
+         $_SESSION['user_id'] = $row['id']; // Add this line to set user_id
+         header('location:admin_page.php');
+         exit(); // Added exit after redirect
+      }elseif($row['user_type'] == 'user'){
+         $_SESSION['user_name'] = $row['name'];
+         $_SESSION['user_id'] = $row['id']; // Add this line to set user_id
+         header('location:user_page.php');
+         exit(); // Added exit after redirect
+      }
    }else{
-      $error[] = 'Failed to resend verification code. Please try again.';
+      $error[] = 'incorrect email or password!';
    }
 }
 ?>
@@ -315,83 +157,224 @@ if(isset($_GET['resend_verification_otp']) && isset($_SESSION['register_email'])
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - MSWDO Gloria</title>
+    <title>MSWDO Gloria - Welcome</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- AOS Animation Library -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <style>
         :root {
             --primary-color: #0c5c2f;
             --secondary-color: #1a2e36;
             --accent-color: #4cd964;
+            --light-bg: #f8f9fa;
+            --dark-text: #212529;
+            --light-text: #f8f9fa;
+            --border-color: #dee2e6;
         }
         
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
         body {
             background-color: #f5f5f5;
-            font-family: 'Poppins', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Header Styles */
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+            z-index: 100;
+        }
+
+        .header-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
             display: flex;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
-            min-height: 100vh;
-            padding: 20px;
         }
-        
-        .login-container {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            padding: 30px;
-            width: 100%;
-            max-width: 450px;
-        }
-        
+
         .logo {
             display: flex;
             align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
         }
-        
+
         .logo img {
             height: 60px;
             margin-right: 15px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
         }
-        
+
         .logo-text h1 {
             font-size: 1.5rem;
             margin-bottom: 5px;
             font-weight: 700;
-            color: var(--primary-color);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
+
         .logo-text p {
             font-size: 0.9rem;
-            color: #6c757d;
-            margin: 0;
+            opacity: 0.9;
         }
-        
-        .form-title {
+
+        /* Navigation */
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Hero Section */
+        .hero {
+           
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+            color: white;
+            padding: 100px 20px;
+            min-height: 600px;
+            display: flex;
+            align-items: center;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(12, 92, 47, 0.9) 0%, rgba(26, 46, 54, 0.85) 100%);
+            z-index: 1;
+        }
+
+        .hero-container {
+            position: relative;
+            z-index: 2;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+        }
+
+        @media (min-width: 992px) {
+            .hero-container {
+                grid-template-columns: 1fr 1fr;
+                align-items: center;
+            }
+        }
+
+        .hero-content {
             text-align: center;
+        }
+
+        @media (min-width: 992px) {
+            .hero-content {
+                text-align: left;
+            }
+        }
+
+        .hero h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            max-width: 600px;
+        }
+
+        /* Auth Forms Container */
+        .auth-container {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 30px;
+            color: #333;
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .auth-container:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e5e5;
             margin-bottom: 25px;
         }
-        
-        .form-title h2 {
-            font-size: 1.8rem;
-            color: var(--primary-color);
-            margin-bottom: 10px;
-        }
-        
-        .form-title p {
+
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
             color: #6c757d;
-            margin: 0;
+            transition: all 0.3s;
+            position: relative;
         }
-        
+
+        .tab-btn.active {
+            color: var(--primary-color);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background-color: var(--primary-color);
+            border-radius: 3px 3px 0 0;
+        }
+
+        /* Form Styles */
         .form-group {
             margin-bottom: 20px;
             position: relative;
         }
-        
+
         .form-group i.icon-left {
             position: absolute;
             left: 15px;
@@ -399,7 +382,18 @@ if(isset($_GET['resend_verification_otp']) && isset($_SESSION['register_email'])
             transform: translateY(-50%);
             color: #6c757d;
         }
-        
+
+        .form-group .toggle-password {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+            cursor: pointer;
+            z-index: 10;
+            display: none; /* Initially hide the toggle icons */
+        }
+
         .form-control {
             width: 100%;
             padding: 12px 15px 12px 45px;
@@ -409,33 +403,42 @@ if(isset($_GET['resend_verification_otp']) && isset($_SESSION['register_email'])
             transition: all 0.3s;
             background-color: #f8f9fa;
         }
-        
+
+        .form-control.password {
+            padding-right: 45px;
+        }
+
         .form-control:focus {
             border-color: var(--primary-color);
             outline: none;
             box-shadow: 0 0 0 3px rgba(12, 92, 47, 0.1);
             background-color: #fff;
         }
-        
-        .otp-input {
-            text-align: center;
-            letter-spacing: 0.5em;
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-        
-        .otp-message {
-            text-align: center;
+
+        .error-msg {
+            display: block;
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
             margin-bottom: 20px;
-            font-size: 0.9rem;
-            color: #6c757d;
+            text-align: center;
+            font-weight: 500;
+            border-left: 4px solid #dc3545;
         }
-        
-        .otp-email {
-            font-weight: 600;
-            color: var(--primary-color);
+
+        .success-msg {
+            display: block;
+            background-color: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            border-left: 4px solid #28a745;
         }
-        
+
         .form-btn {
             width: 100%;
             padding: 12px;
@@ -451,319 +454,1030 @@ if(isset($_GET['resend_verification_otp']) && isset($_SESSION['register_email'])
             letter-spacing: 0.5px;
             box-shadow: 0 4px 6px rgba(12, 92, 47, 0.1);
         }
-        
+
         .form-btn:hover {
             background-color: #0a4a26;
             transform: translateY(-2px);
             box-shadow: 0 6px 8px rgba(12, 92, 47, 0.15);
         }
-        
+
+        .form-btn:active {
+            transform: translateY(0);
+        }
+
         .form-link {
             margin-top: 20px;
             text-align: center;
             color: #6c757d;
         }
-        
+
         .form-link a {
             color: var(--primary-color);
             text-decoration: none;
             font-weight: 600;
             transition: all 0.3s;
         }
-        
+
         .form-link a:hover {
             text-decoration: underline;
         }
-        
-        .error-msg {
-            display: block;
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+
+        /* OTP Input Styles */
+        .otp-input {
             text-align: center;
-            font-weight: 500;
-            border-left: 4px solid #dc3545;
+            letter-spacing: 0.5em;
+            font-size: 1.5rem;
+            font-weight: 600;
         }
-        
-        .success-msg {
-            display: block;
-            background-color: #d4edda;
-            color: #155724;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+
+        .otp-message {
             text-align: center;
-            font-weight: 500;
-            border-left: 4px solid #28a745;
-        }
-        
-        .auth-options {
-            display: flex;
             margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #6c757d;
         }
-        
-        .auth-option {
-            flex: 1;
-            text-align: center;
-            padding: 10px;
-            cursor: pointer;
-            border-bottom: 2px solid #dee2e6;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-        
-        .auth-option.active {
-            border-bottom-color: var(--primary-color);
+
+        .otp-email {
+            font-weight: 600;
             color: var(--primary-color);
         }
-        
-        #register-form {
-            display: none;
+
+        /* Admin Login Link */
+        .admin-login-link {
+            margin-top: 15px;
+            text-align: center;
+            padding-top: 15px;
+            border-top: 1px dashed #dee2e6;
+        }
+
+        .admin-login-link a {
+            display: inline-flex;
+            align-items: center;
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+
+        .admin-login-link a:hover {
+            color: var(--secondary-color);
+        }
+
+        .admin-login-link i {
+            margin-right: 5px;
+        }
+
+        /* About Section */
+        .about {
+            padding: 100px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-title h2 {
+            font-size: 2.2rem;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-weight: 700;
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title h2::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background-color: var(--primary-color);
+            border-radius: 3px;
+        }
+
+        .section-title p {
+            color: #6c757d;
+            max-width: 700px;
+            margin: 0 auto;
+            font-size: 1.1rem;
+        }
+
+        .about-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .about-text {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .about-text h3 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .about-text p {
+            margin-bottom: 20px;
+            font-size: 1.05rem;
+            color: #555;
+        }
+
+        .about-image {
+            flex: 1;
+            min-width: 300px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .about-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
+        }
+
+        .about-image:hover img {
+            transform: scale(1.05);
+        }
+
+        /* Services Section */
+        .services {
+            background-color: #f9f9f9;
+            padding: 100px 20px;
+            position: relative;
+        }
+
+        .services::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(to bottom, #fff 0%, #f9f9f9 100%);
+        }
+
+        .services-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 50px;
+        }
+
+        .service-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+            padding: 30px;
+            transition: all 0.3s;
+            border-bottom: 4px solid transparent;
+        }
+
+        .service-card:hover {
+            transform: translateY(-10px);
+            border-bottom: 4px solid var(--primary-color);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .service-icon {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            background-color: rgba(12, 92, 47, 0.1);
+            width: 70px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .service-card:hover .service-icon {
+            background-color: var(--primary-color);
+            color: white;
+            transform: rotateY(180deg);
+        }
+
+        .service-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .service-card p {
+            color: #6c757d;
+            line-height: 1.7;
+        }
+
+        /* Gallery Section */
+        .gallery {
+            padding: 100px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 50px;
+        }
+
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            height: 250px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
+        }
+
+        .gallery-item:hover img {
+            transform: scale(1.1);
+        }
+
+        .gallery-caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 100%);
+            color: white;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+            display: flex;
+            align-items: flex-end;
+            height: 100%;
+        }
+
+        .gallery-item:hover .gallery-caption {
+            transform: translateY(0);
+        }
+
+        /* Contact Section */
+        .contact {
+            background-color: #f9f9f9;
+            padding: 100px 20px;
+            position: relative;
+        }
+
+        .contact::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(to bottom, #fff 0%, #f9f9f9 100%);
+        }
+
+        .contact-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        .contact-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 40px;
+            margin-top: 50px;
+        }
+
+        .contact-info {
+            flex: 1;
+            min-width: 300px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .contact-info h3 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            font-weight: 600;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .contact-info h3::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background-color: var(--primary-color);
+            border-radius: 3px;
+        }
+
+        .contact-detail {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 25px;
+        }
+
+        .contact-icon {
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            margin-right: 15px;
+            margin-top: 5px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(12, 92, 47, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .contact-text h4 {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .contact-text p {
+            color: #6c757d;
+        }
+
+        .contact-map {
+            flex: 1;
+            min-width: 300px;
+            height: 400px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .contact-map iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Footer */
+        footer {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 70px 20px 20px;
+            position: relative;
+        }
+
+        footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 40px;
+        }
+
+        .footer-col {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .footer-col h3 {
+            font-size: 1.3rem;
+            margin-bottom: 25px;
+            position: relative;
+            padding-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .footer-col h3::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 50px;
+            height: 3px;
+            background-color: var(--primary-color);
+            border-radius: 3px;
+        }
+
+        .footer-col p {
+            margin-bottom: 20px;
+            opacity: 0.8;
+            line-height: 1.7;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.8;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            padding-left: 5px;
+            color: var(--accent-color);
+        }
+
+        .footer-links a i {
+            margin-right: 10px;
+            font-size: 0.8rem;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .social-links a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            color: white;
+            transition: all 0.3s;
+        }
+
+        .social-links a:hover {
+            background-color: var(--primary-color);
+            transform: translateY(-5px);
+        }
+
+        .copyright {
+            text-align: center;
+            padding-top: 30px;
+            margin-top: 50px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+
+        /* Back to Top Button */
+        .back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            z-index: 999;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .back-to-top.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .back-to-top:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-5px);
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .hero {
+                padding: 80px 20px;
+            }
+            
+            .hero h2 {
+                font-size: 2rem;
+            }
+            
+            .hero p {
+                font-size: 1rem;
+            }
+            
+            .section-title h2 {
+                font-size: 1.8rem;
+            }
+            
+            .about, .gallery, .services, .contact {
+                padding: 70px 20px;
+            }
+            
+            .service-card, .gallery-item {
+                min-height: auto;
+            }
+        }
+
+        /* Animation Classes */
+        .fade-up {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .fade-up.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .delay-1 {
+            transition-delay: 0.1s;
+        }
+
+        .delay-2 {
+            transition-delay: 0.2s;
+        }
+
+        .delay-3 {
+            transition-delay: 0.3s;
+        }
+
+        .delay-4 {
+            transition-delay: 0.4s;
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="logo">
-            <img src="/useradmin/img/mswdologo.png" alt="MSWDO Logo">
-            <div class="logo-text">
-                <h1>MSWDO Gloria</h1>
-                <p>Municipal Social Welfare & Development Office</p>
+    <!-- Header -->
+    <header>
+        <div class="header-container">
+            <div class="logo">
+                <img src="/useradmin/img/mswdologo.png" alt="MSWDO Logo">
+                <div class="logo-text">
+                    <h1>MSWDO Gloria</h1>
+                    <p>Municipal Social Welfare & Development Office</p>
+                </div>
+            </div>
+            <div class="nav-links d-none d-md-flex">
+                <a href="#about">About</a>
+                <a href="#services">Services</a>
+                <a href="#gallery">Gallery</a>
+                <a href="#contact">Contact</a>
             </div>
         </div>
-        
-        <?php if (!isset($_SESSION['show_otp_login_form']) && !isset($_SESSION['show_verification_form'])): ?>
-        <div class="auth-options">
-            <div class="auth-option active" id="login-option">Login</div>
-            <div class="auth-option" id="register-option">Register</div>
+    </header>
+
+    <!-- Hero Section with Login/Register Forms -->
+    <section class="hero" id="home">
+        <div class="hero-container">
+            <!-- Left side - Hero content -->
+            <div class="hero-content" data-aos="fade-right" data-aos-duration="1000">
+                <h2>Empowering Communities, Transforming Lives</h2>
+                <p>The Municipal Social Welfare and Development Office of Gloria is committed to providing social protection and promoting the rights and welfare of the poor, vulnerable and disadvantaged individuals and families in our community.</p>
+            </div>
+
+            <!-- Right side - Auth forms -->
+            <div class="auth-container" data-aos="fade-left" data-aos-duration="1000">
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn <?php echo (!isset($_GET['register'])) ? 'active' : ''; ?>" onclick="showTab('login')">Login</button>
+                    <button class="tab-btn <?php echo (isset($_GET['register'])) ? 'active' : ''; ?>" onclick="showTab('register')">Register</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="login-form" style="display: <?php echo (!isset($_GET['register']) && !isset($_SESSION['show_otp_form'])) ? 'block' : 'none'; ?>">
+                    <?php
+                    if(isset($error) && isset($_POST['login_submit'])){
+                        foreach($error as $err){
+                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>'.$err.'</span>';
+                        };
+                    };
+                    ?>
+                    <form action="" method="post">
+                        <div class="form-group">
+                            <i class="fas fa-envelope icon-left"></i>
+                            <input type="email" name="email" class="form-control" required placeholder="Enter your email">
+                        </div>
+                        
+                        <div class="form-group">
+                            <i class="fas fa-lock icon-left"></i>
+                            <input type="password" name="password" id="password" class="form-control password" required placeholder="Enter your password">
+                            <i class="fas fa-eye toggle-password" id="togglePassword"></i>
+                        </div>
+                        
+                        <button type="submit" name="login_submit" class="form-btn">
+                            <i class="fas fa-sign-in-alt me-2"></i> Login
+                        </button>
+                        
+                        <div class="form-link">
+                            <p>Don't have an account? <a href="javascript:void(0)" onclick="showTab('register')">Register Now</a></p>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-form" style="display: <?php echo (isset($_GET['register']) || isset($_SESSION['show_otp_form'])) ? 'block' : 'none'; ?>">
+                    <?php
+                    if(isset($error) && (isset($_POST['register_step1']) || isset($_POST['verify_otp']))){
+                        foreach($error as $err){
+                            echo '<span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i>'.$err.'</span>';
+                        };
+                    };
+                    
+                    // Show OTP verification form if OTP has been sent
+                    if(isset($_SESSION['show_otp_form']) && $_SESSION['show_otp_form'] === true): 
+                    ?>
+                        <div class="success-msg">
+                            <i class="fas fa-check-circle me-2"></i> OTP has been sent to your email: <?php echo $_SESSION['registration_email']; ?>
+                        </div>
+                        <form action="" method="post">
+                            <div class="form-group">
+                                <i class="fas fa-key icon-left"></i>
+                                <input type="text" name="otp" class="form-control otp-input" required placeholder="Enter OTP" maxlength="6">
+                            </div>
+                            
+                            <p class="otp-message">
+                                Please enter the 6-digit verification code sent to <span class="otp-email"><?php echo $_SESSION['registration_email']; ?></span>
+                            </p>
+                            
+                            <button type="submit" name="verify_otp" class="form-btn">
+                                <i class="fas fa-check-circle me-2"></i> Verify & Complete Registration
+                            </button>
+                            
+                            <div class="form-link">
+                                <p>Didn't receive the code? <a href="javascript:void(0)" onclick="resendOTP()">Resend OTP</a></p>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <!-- Regular registration form -->
+                        <form action="" method="post">
+                            <div class="form-group">
+                                <i class="fas fa-user icon-left"></i>
+                                <input type="text" name="name" class="form-control" required placeholder="Full Name">
+                            </div>
+                            
+                            <div class="form-group">
+                                <i class="fas fa-envelope icon-left"></i>
+                                <input type="email" name="email" class="form-control" required placeholder="Email">
+                            </div>
+                            
+                            <div class="form-group">
+                                <i class="fas fa-lock icon-left"></i>
+                                <input type="password" name="password" id="reg-password" class="form-control password" required placeholder="Password">
+                                <i class="fas fa-eye toggle-password" id="toggleRegPassword"></i>
+                            </div>
+                            
+                            <div class="form-group">
+                                <i class="fas fa-check-circle icon-left"></i>
+                                <input type="password" name="cpassword" id="cpassword" class="form-control password" required placeholder="Confirm Password">
+                                <i class="fas fa-eye toggle-password" id="toggleCPassword"></i>
+                            </div>
+                            
+                            <!-- Hidden input for user type -->
+                            <input type="hidden" name="user_type" value="user">
+                            
+                            <button type="submit" name="register_step1" class="form-btn">
+                                <i class="fas fa-user-plus me-2"></i> Continue Registration
+                            </button>
+                            
+                            <div class="form-link">
+                                <p>Already have an account? <a href="javascript:void(0)" onclick="showTab('login')">Login Now</a></p>
+                            </div>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
-        <?php endif; ?>
-        
-        <div class="form-title">
-            <?php if (isset($_SESSION['show_otp_login_form'])): ?>
-                <h2>OTP Verification</h2>
-                <p>Enter the verification code sent to your email</p>
-            <?php elseif (isset($_SESSION['show_verification_form'])): ?>
-                <h2>Email Verification</h2>
-                <p>Enter the verification code sent to your email</p>
-            <?php else: ?>
-                <h2>Welcome Back</h2>
-                <p>Please login to your account</p>
-            <?php endif; ?>
+    </section>
+
+    <!-- About Section -->
+    <section class="about" id="about">
+        <div class="section-title" data-aos="fade-up">
+            <h2>About MSWDO Gloria</h2>
+            <p>Learn more about our mission, vision, and the work we do to serve our community.</p>
         </div>
-        
-        <?php if (!empty($error)): ?>
-            <?php foreach ($error as $err): ?>
-                <span class="error-msg"><i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars($err); ?></span>
-            <?php endforeach; ?>
-        <?php endif; ?>
-        
-        <?php if (!empty($success_msg)): ?>
-            <span class="success-msg"><i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars($success_msg); ?></span>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['show_otp_login_form']) && $_SESSION['show_otp_login_form'] === true): ?>
-            <!-- OTP Verification Form -->
-            <form action="" method="post">
-                <div class="form-group">
-                    <i class="fas fa-key icon-left"></i>
-                    <input type="text" name="otp" class="form-control otp-input" required placeholder="Enter OTP" maxlength="6">
+        <div class="about-content">
+            <div class="about-text" data-aos="fade-right" data-aos-delay="200">
+                <h3>Our Mission</h3>
+                <p>The Municipal Social Welfare and Development Office (MSWDO) of Gloria is dedicated to providing effective and efficient delivery of social welfare and development programs and services to promote social protection and poverty reduction in our community.</p>
+                
+                <h3>Our Vision</h3>
+                <p>We envision a community where every individual and family enjoys a better quality of life, with equal access to opportunities, living in a peaceful, healthy, and sustainable environment.</p>
+                
+                <h3>Our Values</h3>
+                <p>Integrity, Compassion, Excellence, Accountability, and Respect guide our work as we serve the people of Gloria.</p>
+            </div>
+            <div class="about-image" data-aos="fade-left" data-aos-delay="300">
+                <img src="dswdbg.png" alt="MSWDO Team">
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="services" id="services">
+        <div class="services-container">
+            <div class="section-title" data-aos="fade-up">
+                <h2>Our Services</h2>
+                <p>We offer a wide range of social welfare and development programs to address the needs of our community.</p>
+            </div>
+            <div class="services-grid">
+                <div class="service-card" data-aos="fade-up" data-aos-delay="100">
+                    <div class="service-icon">
+                        <i class="fas fa-hands-helping"></i>
+                    </div>
+                    <h3>Social Assistance</h3>
+                    <p>Financial assistance, food aid, and other forms of support for individuals and families in crisis situations.</p>
                 </div>
-                
-                <p class="otp-message">
-                    Please enter the 6-digit verification code sent to <span class="otp-email"><?php echo htmlspecialchars($_SESSION['login_email']); ?></span>
-                </p>
-                
-                <button type="submit" name="verify_login_otp" class="form-btn">
-                    <i class="fas fa-sign-in-alt me-2"></i> Verify & Login
-                </button>
-                
-                <div class="form-link">
-                    <p>Didn't receive the code? <a href="?resend_login_otp=true">Resend OTP</a></p>
+                <div class="service-card" data-aos="fade-up" data-aos-delay="200">
+                    <div class="service-icon">
+                        <i class="fas fa-child"></i>
+                    </div>
+                    <h3>Child Protection</h3>
+                    <p>Programs and services aimed at protecting children from abuse, neglect, exploitation, and violence.</p>
                 </div>
-                
-                <div class="form-link">
-                    <p><a href="index.php"><i class="fas fa-arrow-left me-1"></i> Back to Login</a></p>
+                <div class="service-card" data-aos="fade-up" data-aos-delay="300">
+                    <div class="service-icon">
+                        <i class="fas fa-user-friends"></i>
+                    </div>
+                    <h3>Family Development</h3>
+                    <p>Services that strengthen family relationships and enhance parenting capabilities.</p>
                 </div>
-            </form>
-        <?php elseif (isset($_SESSION['show_verification_form']) && $_SESSION['show_verification_form'] === true): ?>
-            <!-- Registration Verification Form -->
-            <form action="" method="post">
-                <div class="form-group">
-                    <i class="fas fa-key icon-left"></i>
-                    <input type="text" name="verification_otp" class="form-control otp-input" required placeholder="Enter Code" maxlength="6">
+                <div class="service-card" data-aos="fade-up" data-aos-delay="100">
+                    <div class="service-icon">
+                        <i class="fas fa-wheelchair"></i>
+                    </div>
+                    <h3>Disability Affairs</h3>
+                    <p>Support services for persons with disabilities to promote their rights and welfare.</p>
                 </div>
-                
-                <p class="otp-message">
-                    Please enter the 6-digit verification code sent to <span class="otp-email"><?php echo htmlspecialchars($_SESSION['register_email']); ?></span>
-                </p>
-                
-                <button type="submit" name="verify_registration" class="form-btn">
-                    <i class="fas fa-user-check me-2"></i> Verify & Complete Registration
-                </button>
-                
-                <div class="form-link">
-                    <p>Didn't receive the code? <a href="?resend_verification_otp=true">Resend Code</a></p>
+                <div class="service-card" data-aos="fade-up" data-aos-delay="200">
+                    <div class="service-icon">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <h3>Educational Assistance</h3>
+                    <p>Scholarships and educational support for deserving students from low-income families.</p>
                 </div>
-                
-                <div class="form-link">
-                    <p><a href="index.php"><i class="fas fa-arrow-left me-1"></i> Back to Login</a></p>
+                <div class="service-card" data-aos="fade-up" data-aos-delay="300">
+                    <div class="service-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <h3>Housing Assistance</h3>
+                    <p>Programs that help improve housing conditions for vulnerable families in our community.</p>
                 </div>
-            </form>
-        <?php else: ?>
-            <!-- Login Form -->
-            <form action="" method="post" id="login-form">
-                <div class="form-group">
-                    <i class="fas fa-envelope icon-left"></i>
-                    <input type="email" name="email" class="form-control" required placeholder="Email">
+            </div>
+        </div>
+    </section>
+
+    <!-- Gallery Section -->
+    <section class="gallery" id="gallery">
+        <div class="section-title" data-aos="fade-up">
+            <h2>Gallery</h2>
+            <p>See our programs and activities in action as we serve the community of Gloria.</p>
+        </div>
+        <div class="gallery-grid">
+            <div class="gallery-item" data-aos="zoom-in" data-aos-delay="100">
+                <img src="/placeholder.svg?height=250&width=350" alt="Community Outreach">
+                <div class="gallery-caption">Community Outreach Program</div>
+            </div>
+            <div class="gallery-item" data-aos="zoom-in" data-aos-delay="200">
+                <img src="/placeholder.svg?height=250&width=350" alt="Food Distribution">
+                <div class="gallery-caption">Food Distribution Activity</div>
+            </div>
+            <div class="gallery-item" data-aos="zoom-in" data-aos-delay="300">
+                <img src="/placeholder.svg?height=250&width=350" alt="Child Development">
+                <div class="gallery-caption">Child Development Session</div>
+            </div>
+            <div class="gallery-item" data-aos="zoom-in" data-aos-delay="100">
+                <img src="/placeholder.svg?height=250&width=350" alt="Senior Citizens">
+                <div class="gallery-caption">Senior Citizens' Gathering</div>
+            </div>
+            <div class="gallery-item" data-aos="zoom-in" data-aos-delay="200">
+                <img src="/placeholder.svg?height=250&width=350" alt="Livelihood Training">
+                <div class="gallery-caption">Livelihood Training Workshop</div>
+            </div>
+            <div class="gallery-item" data-aos="zoom-in" data-aos-delay="300">
+                <img src="/placeholder.svg?height=250&width=350" alt="Medical Mission">
+                <div class="gallery-caption">Medical Mission</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="contact" id="contact">
+        <div class="contact-container">
+            <div class="section-title" data-aos="fade-up">
+                <h2>Contact Us</h2>
+                <p>Get in touch with us for inquiries, assistance, or more information about our programs and services.</p>
+            </div>
+            <div class="contact-content">
+                <div class="contact-info" data-aos="fade-right" data-aos-delay="200">
+                    <h3>Get In Touch</h3>
+                    <div class="contact-detail">
+                        <div class="contact-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="contact-text">
+                            <h4>Address</h4>
+                            <p>Municipal Hall, Gloria, Oriental Mindoro, Philippines</p>
+                        </div>
+                    </div>
+                    <div class="contact-detail">
+                        <div class="contact-icon">
+                            <i class="fas fa-phone-alt"></i>
+                        </div>
+                        <div class="contact-text">
+                            <h4>Phone</h4>
+                            <p>+63 (XXX) XXX-XXXX</p>
+                        </div>
+                    </div>
+                    <div class="contact-detail">
+                        <div class="contact-icon">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div class="contact-text">
+                            <h4>Email</h4>
+                            <p>mswdo.gloria@gmail.com</p>
+                        </div>
+                    </div>
+                    <div class="contact-detail">
+                        <div class="contact-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="contact-text">
+                            <h4>Office Hours</h4>
+                            <p>Monday to Friday: 8:00 AM - 5:00 PM</p>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <i class="fas fa-lock icon-left"></i>
-                    <input type="password" name="password" class="form-control" required placeholder="Password">
+                <div class="contact-map" data-aos="fade-left" data-aos-delay="300">
+                    <!-- Replace with actual Google Maps embed code for Gloria, Oriental Mindoro -->
+                    <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123939.95165916862!2d121.41660259726562!3d13.099999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x33bcf9f93b29c91f%3A0x3b06d7b27da7c4a0!2sGloria%2C%20Oriental%20Mindoro!5e0!3m2!1sen!2sph!4v1648226000000!5m2!1sen!2sph" allowfullscreen="" loading="lazy"></iframe>
                 </div>
-                
-                <button type="submit" name="submit" class="form-btn">
-                    <i class="fas fa-sign-in-alt me-2"></i> Login
-                </button>
-                
-                <div class="form-link">
-                    <p>Login with OTP? <a href="#" id="otp-login-link">Click here</a></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-col">
+                <h3>MSWDO Gloria</h3>
+                <p>The Municipal Social Welfare and Development Office of Gloria is dedicated to serving the community through various social programs and services.</p>
+                <div class="social-links">
+                    <a href="#" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="#" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
                 </div>
-                
-                <div class="form-link">
-                    <p>Don't have an account? <a href="#" id="switch-to-register">Register now</a></p>
-                </div>
-            </form>
-            
-            <!-- Register Form -->
-            <form action="" method="post" id="register-form">
-                <div class="form-group">
-                    <i class="fas fa-user icon-left"></i>
-                    <input type="text" name="name" class="form-control" required placeholder="Full Name">
-                </div>
-                
-                <div class="form-group">
-                    <i class="fas fa-envelope icon-left"></i>
-                    <input type="email" name="email" class="form-control" required placeholder="Email">
-                </div>
-                
-                <div class="form-group">
-                    <i class="fas fa-lock icon-left"></i>
-                    <input type="password" name="password" class="form-control" required placeholder="Password">
-                </div>
-                
-                <div class="form-group">
-                    <i class="fas fa-lock icon-left"></i>
-                    <input type="password" name="cpassword" class="form-control" required placeholder="Confirm Password">
-                </div>
-                
-                <button type="submit" name="register" class="form-btn">
-                    <i class="fas fa-user-plus me-2"></i> Register
-                </button>
-                
-                <div class="form-link">
-                    <p>Already have an account? <a href="#" id="switch-to-login">Login now</a></p>
-                </div>
-            </form>
-            
-            <!-- OTP Login Form -->
-            <form action="" method="post" id="otp-login-form" style="display: none;">
-                <div class="form-group">
-                    <i class="fas fa-envelope icon-left"></i>
-                    <input type="email" name="email" class="form-control" required placeholder="Enter your email">
-                </div>
-                
-                <button type="submit" name="request_otp" class="form-btn">
-                    <i class="fas fa-paper-plane me-2"></i> Send OTP
-                </button>
-                
-                <div class="form-link">
-                    <p><a href="#" id="back-to-login"><i class="fas fa-arrow-left me-1"></i> Back to Login</a></p>
-                </div>
-            </form>
-        <?php endif; ?>
+            </div>
+            <div class="footer-col">
+                <h3>Quick Links</h3>
+                <ul class="footer-links">
+                    <li><a href="#about"><i class="fas fa-chevron-right"></i> About Us</a></li>
+                    <li><a href="#services"><i class="fas fa-chevron-right"></i> Our Services</a></li>
+                    <li><a href="#gallery"><i class="fas fa-chevron-right"></i> Gallery</a></li>
+                    <li><a href="#contact"><i class="fas fa-chevron-right"></i> Contact Us</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h3>Contact Information</h3>
+                <ul class="footer-links">
+                    <li><a href="#"><i class="fas fa-map-marker-alt"></i> Municipal Hall, Gloria, Oriental Mindoro</a></li>
+                    <li><a href="tel:+63(XXX)XXX-XXXX"><i class="fas fa-phone-alt"></i> +63 (XXX) XXX-XXXX</a></li>
+                    <li><a href="mailto:mswdo.gloria@gmail.com"><i class="fas fa-envelope"></i> mswdo.gloria@gmail.com</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h3>Subscribe</h3>
+                <p>Stay updated with our latest programs and activities. Subscribe to our newsletter.</p>
+                <form action="#" method="post">
+                    <input type="email" placeholder="Enter your email" required>
+                    <button type="submit">Subscribe</button>
+                </form>
+            </div>
+        </div>
+        <div class="copyright">
+            &copy; 2024 MSWDO Gloria. All rights reserved.
+        </div>
+    </footer>
+
+    <!-- Back to Top Button -->
+    <div class="back-to-top" onclick="scrollToTop()">
+        <i class="fas fa-chevron-up"></i>
     </div>
-    
-    <!-- Bootstrap JS Bundle with Popper -->
+
+    <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- AOS Animation Library -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const loginOption = document.getElementById('login-option');
-            const registerOption = document.getElementById('register-option');
-            const loginForm = document.getElementById('login-form');
-            const registerForm = document.getElementById('register-form');
-            const otpLoginForm = document.getElementById('otp-login-form');
-            const switchToRegister = document.getElementById('switch-to-register');
-            const switchToLogin = document.getElementById('switch-to-login');
-            const otpLoginLink = document.getElementById('otp-login-link');
-            const backToLogin = document.getElementById('back-to-login');
-            
-            if (loginOption && registerOption) {
-                loginOption.addEventListener('click', function() {
-                    loginOption.classList.add('active');
-                    registerOption.classList.remove('active');
-                    loginForm.style.display = 'block';
-                    registerForm.style.display = 'none';
-                    otpLoginForm.style.display = 'none';
-                });
-                
-                registerOption.addEventListener('click', function() {
-                    registerOption.classList.add('active');
-                    loginOption.classList.remove('active');
-                    registerForm.style.display = 'block';
-                    loginForm.style.display = 'none';
-                    otpLoginForm.style.display = 'none';
-                });
+        AOS.init({
+            duration: 800,
+            once: true,
+        });
+
+        // Function to show tab
+        function showTab(tabId) {
+            document.getElementById('login-form').style.display = (tabId === 'login') ? 'block' : 'none';
+            document.getElementById('register-form').style.display = (tabId === 'register') ? 'block' : 'none';
+
+            // Update active class on tabs
+            document.querySelector('.tab-btn.active').classList.remove('active');
+            document.querySelector(`.tab-btn[onclick="showTab('${tabId}')"]`).classList.add('active');
+
+            // Update URL to reflect the active tab
+            const url = new URL(window.location);
+            if (tabId === 'register') {
+                url.searchParams.set('register', 'true');
+            } else {
+                url.searchParams.delete('register');
             }
-            
-            if (switchToRegister) {
-                switchToRegister.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    if (registerOption) {
-                        registerOption.classList.add('active');
-                        loginOption.classList.remove('active');
-                    }
-                    registerForm.style.display = 'block';
-                    loginForm.style.display = 'none';
-                    otpLoginForm.style.display = 'none';
-                });
+            window.history.pushState({}, '', url);
+        }
+
+        // Function to resend OTP
+        function resendOTP() {
+            // You can implement AJAX call here to resend OTP
+            // For now, we'll just submit the form again
+            window.location.href = 'index.php?resend_otp=true';
+        }
+
+        // Function to scroll to top
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // Show back to top button when scrolling down
+        window.addEventListener('scroll', () => {
+            const backToTopButton = document.querySelector('.back-to-top');
+            if (window.pageYOffset > 300) {
+                backToTopButton.classList.add('show');
+            } else {
+                backToTopButton.classList.remove('show');
             }
-            
-            if (switchToLogin) {
-                switchToLogin.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    if (loginOption) {
-                        loginOption.classList.add('active');
-                        registerOption.classList.remove('active');
-                    }
-                    loginForm.style.display = 'block';
-                    registerForm.style.display = 'none';
-                    otpLoginForm.style.display = 'none';
-                });
-            }
-            
-            if (otpLoginLink) {
-                otpLoginLink.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    loginForm.style.display = 'none';
-                    registerForm.style.display = 'none';
-                    otpLoginForm.style.display = 'block';
-                });
-            }
-            
-            if (backToLogin) {
-                backToLogin.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    loginForm.style.display = 'block';
-                    registerForm.style.display = 'none';
-                    otpLoginForm.style.display = 'none';
-                });
-            }
+        });
+
+        // Password toggle functionality
+        document.querySelectorAll('.toggle-password').forEach(function(toggleButton) {
+            toggleButton.style.display = 'block'; // Show the toggle icons
+            toggleButton.addEventListener('click', function() {
+                const passwordInput = this.closest('.form-group').querySelector('.form-control.password');
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                this.classList.toggle('fa-eye');
+                this.classList.toggle('fa-eye-slash');
+            });
         });
     </script>
 </body>
 </html>
-

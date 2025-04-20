@@ -21,76 +21,52 @@ require 'PHPMailer/src/SMTP.php';
  * @return array Success status and error message if any
  */
 function sendEmail($to_email, $to_name, $subject, $html_message, $plain_message = '') {
-    // Create a new PHPMailer instance
     $mail = new PHPMailer(true);
     
     try {
+        // Debugging - set to 0 in production after testing
+        $mail->SMTPDebug = SMTP::DEBUG_CONNECTION;
+        
         // Server settings
-        // Enable verbose debug output (set to 0 in production)
-        $mail->SMTPDebug = 0;
-        
-        // Set mailer to use SMTP
         $mail->isSMTP();
-        
-        // Gmail SMTP server
         $mail->Host = 'smtp.gmail.com';
-        
-        // Enable SMTP authentication
+        $mail->Port = 465;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
         $mail->SMTPAuth = true;
         
-        // SMTP username (your Gmail address)
-        $mail->Username = 'itsnotalexx25@gmail.com';
+        // Credentials - USE ACTUAL VALUES OR ENVIRONMENT VARIABLES
+        $mail->Username = 'itsnotalexx25@gmail.com'; // Must match authenticated account
+        $mail->Password = 'qhowygajsdahqajj'; // Replace with actual app password
         
-        // SMTP password (your Gmail app password)
-        $mail->Password = 'fxit obtd xjeu ezzy'; // Replace with your actual app password
+        // Sender must match authenticated account or be properly delegated
+        $mail->setFrom('itsnotalexx25@gmail.com', 'MSWDO Gloria');
+        $mail->addReplyTo('itsnotalexx25@gmail.com', 'MSWDO Information');
         
-        // Enable TLS encryption
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        
-        // TCP port to connect to; use 587 for TLS
-        $mail->Port = 587;
-        
-        // Set timeout to avoid long waiting times
-        $mail->Timeout = 30;
-        
-        // Set the 'from' address and name
-        $mail->setFrom('itsnotalexx25@gmail.com', 'MSWDO GLORIA');
-        
-        // Add a recipient
+        // Recipient
         $mail->addAddress($to_email, $to_name);
         
-        // Set email format to HTML
+        // Content
         $mail->isHTML(true);
-        
-        // Set the subject
         $mail->Subject = $subject;
-        
-        // Set the HTML body
         $mail->Body = $html_message;
+        $mail->AltBody = $plain_message ?: strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $html_message));
         
-        // Set the plain text body as alternative
-        if (empty($plain_message)) {
-            // If no plain text is provided, create one by stripping HTML
-            $plain_message = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $html_message));
+        // Reduce timeout for faster failure
+        $mail->Timeout = 10;
+        
+        if (!$mail->send()) {
+            throw new Exception('Send failed');
         }
-        $mail->AltBody = $plain_message;
         
-        // Send the email
-        $mail->send();
+        return ['success' => true, 'error' => null];
         
-        // Return success
-        return [
-            'success' => true,
-            'error' => null
-        ];
     } catch (Exception $e) {
-        // Log the error for debugging
-        error_log("Mailer Error: " . $mail->ErrorInfo);
+        $error = $mail->ErrorInfo ?: $e->getMessage();
+        error_log("[Email Error] " . date('Y-m-d H:i:s') . " - Error: $error");
         
-        // Return failure with error message
         return [
             'success' => false,
-            'error' => $mail->ErrorInfo
+            'error' => 'Email service temporarily unavailable'
         ];
     }
 }
